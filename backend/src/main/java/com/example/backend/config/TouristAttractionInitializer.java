@@ -1,9 +1,10 @@
 package com.example.backend.config;
 
-import com.example.backend.visit_city.entity.AttractionCategory;
-import com.example.backend.visit_city.entity.TouristAttraction;
-import com.example.backend.visit_city.repository.TouristAttractionRepository;
+import com.example.backend.entity.AttractionCategory;
+import com.example.backend.entity.TouristAttraction;
+import com.example.backend.repository.TouristAttractionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -11,168 +12,45 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class TouristAttractionInitializer implements CommandLineRunner {
 
     private final TouristAttractionRepository attractionRepository;
 
     @Override
     public void run(String... args) {
-        if (attractionRepository.count() > 0) {
-            return;
-        }
+        if (attractionRepository.count() > 0) return;
 
         List<TouristAttraction> attractions = List.of(
-                // Squares & Monuments
-                TouristAttraction.builder()
-                        .name("Piata Mare")
-                        .description("The main square of Sibiu, surrounded by historic buildings")
-                        .latitude(46.1914)
-                        .longitude(24.1406)
-                        .city("Sibiu")
-                        .category(AttractionCategory.SQUARE)
-                        .estimatedVisitTime(30)
-                        .isActive(true)
-                        .build(),
-
-                TouristAttraction.builder()
-                        .name("Council Tower")
-                        .description("The iconic tower of Sibiu, a symbol of the city")
-                        .latitude(46.1917)
-                        .longitude(24.1408)
-                        .city("Sibiu")
-                        .category(AttractionCategory.MONUMENT)
-                        .estimatedVisitTime(45)
-                        .isActive(true)
-                        .build(),
-
-                TouristAttraction.builder()
-                        .name("Bridge of Lies")
-                        .description("The legendary bridge of Sibiu, steeped in legends and history")
-                        .latitude(46.1915)
-                        .longitude(24.1415)
-                        .city("Sibiu")
-                        .category(AttractionCategory.MONUMENT)
-                        .estimatedVisitTime(15)
-                        .isActive(true)
-                        .build(),
-
-                // Museums
-                TouristAttraction.builder()
-                        .name("Brukenthal Museum")
-                        .description("Art and history museum, one of the most important collections in Romania")
-                        .latitude(46.1910)
-                        .longitude(24.1400)
-                        .city("Sibiu")
-                        .category(AttractionCategory.MUSEUM)
-                        .estimatedVisitTime(90)
-                        .isActive(true)
-                        .build(),
-
-                TouristAttraction.builder()
-                        .name("ASTRA Museum")
-                        .description("ASTRA National Museum Complex of Traditional Folk Civilization")
-                        .latitude(46.1800)
-                        .longitude(24.1200)
-                        .city("Sibiu")
-                        .category(AttractionCategory.MUSEUM)
-                        .estimatedVisitTime(120)
-                        .isActive(true)
-                        .build(),
-
-                // Churches
-                TouristAttraction.builder()
-                        .name("Evangelical Church")
-                        .description("The evangelical church in the historic center")
-                        .latitude(46.1920)
-                        .longitude(24.1410)
-                        .city("Sibiu")
-                        .category(AttractionCategory.CHURCH)
-                        .estimatedVisitTime(30)
-                        .isActive(true)
-                        .build(),
-
-                TouristAttraction.builder()
-                        .name("Orthodox Cathedral")
-                        .description("The orthodox cathedral of Sibiu")
-                        .latitude(46.1930)
-                        .longitude(24.1420)
-                        .city("Sibiu")
-                        .category(AttractionCategory.CHURCH)
-                        .estimatedVisitTime(30)
-                        .isActive(true)
-                        .build(),
-
-                // Parks
-                TouristAttraction.builder()
-                        .name("Sub Arini Park")
-                        .description("The main park of Sibiu, perfect for relaxation")
-                        .latitude(46.1950)
-                        .longitude(24.1450)
-                        .city("Sibiu")
-                        .category(AttractionCategory.PARK)
-                        .estimatedVisitTime(45)
-                        .isActive(true)
-                        .build(),
-
-                // Restaurants & Cafes
-                TouristAttraction.builder()
-                        .name("Crama Sibiana")
-                        .description("Traditional Romanian restaurant")
-                        .latitude(46.1918)
-                        .longitude(24.1407)
-                        .city("Sibiu")
-                        .category(AttractionCategory.RESTAURANT)
-                        .estimatedVisitTime(60)
-                        .isActive(true)
-                        .build(),
-
-                TouristAttraction.builder()
-                        .name("Cafeneaua Imperium")
-                        .description("Cafe in the historic center")
-                        .latitude(46.1916)
-                        .longitude(24.1409)
-                        .city("Sibiu")
-                        .category(AttractionCategory.CAFE)
-                        .estimatedVisitTime(30)
-                        .isActive(true)
-                        .build(),
-
-                TouristAttraction.builder()
-                        .name("Cafeneaua Hermania")
-                        .description("Cafe with authentic atmosphere")
-                        .latitude(46.1912)
-                        .longitude(24.1405)
-                        .city("Sibiu")
-                        .category(AttractionCategory.CAFE)
-                        .estimatedVisitTime(30)
-                        .isActive(true)
-                        .build(),
-
-                // Other
-                TouristAttraction.builder()
-                        .name("Sibiu Fortress")
-                        .description("The medieval fortifications of Sibiu")
-                        .latitude(46.1925)
-                        .longitude(24.1420)
-                        .city("Sibiu")
-                        .category(AttractionCategory.FORTRESS)
-                        .estimatedVisitTime(60)
-                        .isActive(true)
-                        .build(),
-
-                TouristAttraction.builder()
-                        .name("National Theatre")
-                        .description("Radu Stanca National Theatre")
-                        .latitude(46.1900)
-                        .longitude(24.1390)
-                        .city("Sibiu")
-                        .category(AttractionCategory.THEATER)
-                        .estimatedVisitTime(30)
-                        .isActive(true)
-                        .build()
+                attraction("Piata Unirii", "The main square of Cluj-Napoca, heart of the city", 46.7712, 23.5898, AttractionCategory.SQUARE, 30),
+                attraction("St. Michael's Church", "Gothic church in the center of Piata Unirii", 46.7710, 23.5901, AttractionCategory.CHURCH, 30),
+                attraction("Matthias Corvinus Statue", "Equestrian statue of King Matthias Corvinus", 46.7708, 23.5896, AttractionCategory.MONUMENT, 15),
+                attraction("National Museum of Art", "Art museum in the Banffy Palace", 46.7706, 23.5892, AttractionCategory.MUSEUM, 90),
+                attraction("Ethnographic Museum of Transylvania", "Museum of Transylvanian folk culture", 46.7700, 23.5880, AttractionCategory.MUSEUM, 60),
+                attraction("Central Park", "Main park of Cluj-Napoca with lake and casino", 46.7680, 23.5790, AttractionCategory.PARK, 45),
+                attraction("Casino Building", "Historic casino building in Central Park", 46.7678, 23.5785, AttractionCategory.MONUMENT, 20),
+                attraction("Botanical Garden", "One of the largest botanical gardens in Romania", 46.7620, 23.5880, AttractionCategory.PARK, 90),
+                attraction("Mirror Street", "Street known for its baroque architecture", 46.7720, 23.5910, AttractionCategory.MONUMENT, 20),
+                attraction("Tailors' Bastion", "Medieval fortification tower, part of the old city walls", 46.7730, 23.5860, AttractionCategory.FORTRESS, 30),
+                attraction("Orthodox Cathedral", "The Orthodox Cathedral of Cluj-Napoca", 46.7695, 23.5920, AttractionCategory.CHURCH, 30),
+                attraction("National Theatre", "Lucian Blaga National Theatre", 46.7705, 23.5870, AttractionCategory.THEATER, 30),
+                attraction("Cetatuia Hill", "Hill with panoramic view of the city", 46.7750, 23.5830, AttractionCategory.PARK, 60)
         );
 
         attractionRepository.saveAll(attractions);
-        System.out.println("Initialized " + attractions.size() + " tourist attractions in Sibiu");
+        log.info("Initialized {} tourist attractions in Cluj-Napoca", attractions.size());
+    }
+
+    private TouristAttraction attraction(String name, String description, double lat, double lon,
+                                          AttractionCategory category, int visitTime) {
+        return TouristAttraction.builder()
+                .name(name)
+                .description(description)
+                .latitude(lat).longitude(lon)
+                .city("Cluj-Napoca")
+                .category(category)
+                .estimatedVisitTime(visitTime)
+                .isActive(true)
+                .build();
     }
 }

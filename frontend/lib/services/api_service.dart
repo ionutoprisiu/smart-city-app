@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../config/app_config.dart';
-import '../common/utils/logger.dart';
+import '../utils/logger.dart';
 import 'storage_service.dart';
 
 class ApiException implements Exception {
@@ -133,7 +133,6 @@ class ApiService {
     }
   }
 
-  /// Uploads an image to the server; returns the URL provided by the backend.
   Future<String> uploadImage(File file) async {
     final url = Uri.parse('${ApiConfig.baseUrl}/upload/image');
     try {

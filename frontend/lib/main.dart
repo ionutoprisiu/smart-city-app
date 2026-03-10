@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'services/storage_service.dart';
-import 'auth/auth_provider.dart';
-import 'auth/screens/login_screen.dart';
-import 'auth/screens/register_screen.dart';
-import 'auth/screens/home_screen.dart';
+import 'providers/auth_provider.dart';
+import 'providers/visit_city_provider.dart';
+import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,8 +19,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider()..initialize(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
+        ChangeNotifierProvider(create: (_) => VisitCityProvider()),
+      ],
       child: MaterialApp(
         title: 'Smart City App',
         debugShowCheckedModeBanner: false,

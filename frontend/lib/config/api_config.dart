@@ -5,7 +5,7 @@ import '../services/storage_service.dart';
 class ApiConfig {
   /// Your Mac's IP on the Wi-Fi network (System Settings -> Network). iPhone and Mac must be on the same Wi-Fi.
   /// Do NOT commit this IP if the repo is public!
-  static const String localIp = String.fromEnvironment('LOCAL_IP', defaultValue: '192.168.0.243'); // <-- Change to your local IP
+  static const String localIp = String.fromEnvironment('LOCAL_IP', defaultValue: '172.20.10.5'); // <-- Change to your local IP
 
   static String getBaseUrl() {
     if (kIsWeb) {
@@ -25,6 +25,7 @@ class ApiConfig {
   static String get baseUrl => getBaseUrl();
 
   static const String authEndpoint = '/auth';
+  static const String visitCityEndpoint = '/visit-city';
 
   static Map<String, String> getHeaders({String? token, int? userId}) {
     final headers = <String, String>{

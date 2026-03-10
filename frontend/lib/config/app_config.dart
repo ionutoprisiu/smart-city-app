@@ -8,7 +8,6 @@ class AppConfig {
   static const String userEmailKey = 'user_email';
   static const String userNameKey = 'user_name';
   static const String userTokenKey = 'user_token';
-  static const String licensePlateKey = 'license_plate';
 
   // Timeouts
   static const Duration apiTimeout = Duration(seconds: 30);

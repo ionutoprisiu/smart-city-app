@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
-import '../common/utils/logger.dart';
+import '../utils/logger.dart';
 
 class StorageService {
   static SharedPreferences? _prefs;
@@ -58,25 +58,12 @@ class StorageService {
     return await _prefs?.remove(AppConfig.userTokenKey) ?? false;
   }
 
-  static Future<bool> saveLicensePlate(String licensePlate) async {
-    return await _prefs?.setString(AppConfig.licensePlateKey, licensePlate) ?? false;
-  }
-
-  static String? getLicensePlate() {
-    return _prefs?.getString(AppConfig.licensePlateKey);
-  }
-
-  static Future<bool> removeLicensePlate() async {
-    return await _prefs?.remove(AppConfig.licensePlateKey) ?? false;
-  }
-
   static Future<bool> clearAll() async {
     try {
       await removeUserId();
       await removeUserEmail();
       await removeUserName();
       await removeUserToken();
-      await removeLicensePlate();
       Logger.info('All user data cleared');
       return true;
     } catch (e) {

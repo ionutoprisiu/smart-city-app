@@ -19,7 +19,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleRuntime(RuntimeException e) {
         String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
         if (msg.contains("not found")) return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        if (msg.contains("forbidden") || msg.contains("only admin") || msg.contains("only operator")) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        if (msg.contains("forbidden") || msg.contains("only admin")) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
     }
 

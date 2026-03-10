@@ -22,8 +22,13 @@ dependencies:
   # Local Storage
   shared_preferences: ^2.2.3
 
-  # Image picker (ID card photo for resident registration)
-  image_picker: ^1.0.7
+  # Maps
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  flutter_map_marker_cluster_2: ^1.0.4
+
+  # Location
+  geolocator: ^13.0.2
 
 dev_dependencies:
   flutter_test:
