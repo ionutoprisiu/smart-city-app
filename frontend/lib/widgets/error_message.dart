@@ -10,7 +10,7 @@ class ErrorMessage extends StatelessWidget {
     super.key,
     this.message,
     this.onRetry,
-    this.icon = Icons.error_outline,
+    this.icon = Icons.cloud_off_outlined,
   });
 
   @override
@@ -18,27 +18,44 @@ class ErrorMessage extends StatelessWidget {
     if (message == null || message!.isEmpty) {
       return const SizedBox.shrink();
     }
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppConstants.paddingLarge),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 64, color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: AppConstants.paddingMedium),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: cs.errorContainer.withValues(alpha: 0.45),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 40, color: cs.error),
+            ),
+            const SizedBox(height: AppConstants.paddingLarge),
+            Text(
+              'Something went wrong',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
             Text(
               message!,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
               textAlign: TextAlign.center,
             ),
             if (onRetry != null) ...[
               const SizedBox(height: AppConstants.paddingLarge),
-              FilledButton.icon(
+              FilledButton.tonalIcon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Try again'),
               ),
             ],
           ],

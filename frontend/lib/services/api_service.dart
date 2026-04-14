@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
+
 import 'package:http/http.dart' as http;
+
 import '../config/api_config.dart';
 import '../config/app_config.dart';
 import '../utils/logger.dart';
@@ -38,25 +39,6 @@ class ApiService {
     return StorageService.getUserToken();
   }
 
-  Future<Map<String, dynamic>> get(String endpoint,
-      {String? token, int? userId}) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
-    try {
-      final headers = ApiConfig.getHeaders(
-        token: token ?? _getToken(),
-        userId: userId ?? int.tryParse(_getUserId()),
-      );
-      Logger.debug('GET Request: $url');
-      final response = await http
-          .get(url, headers: headers)
-          .timeout(AppConfig.apiTimeout);
-      return _handleResponse(response);
-    } catch (e) {
-      Logger.error('GET Request failed: $endpoint', e);
-      rethrow;
-    }
-  }
-
   Future<List<dynamic>> getList(String endpoint,
       {String? token, int? userId}) async {
     final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
@@ -91,63 +73,6 @@ class ApiService {
       return _handleResponse(response);
     } catch (e) {
       Logger.error('POST Request failed: $endpoint', e);
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> put(String endpoint, Map<String, dynamic> data,
-      {String? token, int? userId}) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
-    try {
-      final headers = ApiConfig.getHeaders(
-        token: token ?? _getToken(),
-        userId: userId ?? int.tryParse(_getUserId()),
-      );
-      Logger.debug('PUT Request: $url, Body: $data');
-      final response = await http
-          .put(url, headers: headers, body: jsonEncode(data))
-          .timeout(AppConfig.apiTimeout);
-      return _handleResponse(response);
-    } catch (e) {
-      Logger.error('PUT Request failed: $endpoint', e);
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> delete(String endpoint,
-      {String? token, int? userId}) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
-    try {
-      final headers = ApiConfig.getHeaders(
-        token: token ?? _getToken(),
-        userId: userId ?? int.tryParse(_getUserId()),
-      );
-      Logger.debug('DELETE Request: $url');
-      final response = await http
-          .delete(url, headers: headers)
-          .timeout(AppConfig.apiTimeout);
-      return _handleResponse(response);
-    } catch (e) {
-      Logger.error('DELETE Request failed: $endpoint', e);
-      rethrow;
-    }
-  }
-
-  Future<String> uploadImage(File file) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}/upload/image');
-    try {
-      final request = http.MultipartRequest('POST', url);
-      request.files.add(await http.MultipartFile.fromPath('file', file.path));
-      final streamed = await request.send().timeout(AppConfig.apiTimeout);
-      final response = await http.Response.fromStream(streamed);
-      final json = _handleResponse(response);
-      final urlStr = json['url'] as String?;
-      if (urlStr == null || urlStr.isEmpty) {
-        throw ApiException(message: 'Server did not return an image URL');
-      }
-      return urlStr;
-    } catch (e) {
-      Logger.error('Upload image failed', e);
       rethrow;
     }
   }

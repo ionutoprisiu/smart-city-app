@@ -19,6 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -27,15 +28,16 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        destinations: const [
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.explore_outlined),
-            selectedIcon: Icon(Icons.explore),
+            icon: Icon(Icons.explore_outlined, color: cs.onSurfaceVariant),
+            selectedIcon: Icon(Icons.explore_rounded, color: cs.primary),
             label: 'Visit City',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outlined),
-            selectedIcon: Icon(Icons.person),
+            icon: Icon(Icons.person_outline_rounded, color: cs.onSurfaceVariant),
+            selectedIcon: Icon(Icons.person_rounded, color: cs.primary),
             label: 'Profile',
           ),
         ],
@@ -50,7 +52,10 @@ class _ProfileWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(
+        title: const Text('Profile'),
+        automaticallyImplyLeading: false,
+      ),
       body: const ProfileScreen(),
     );
   }

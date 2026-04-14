@@ -41,10 +41,16 @@ class VisitCityRepository {
     }
   }
 
-  Future<RouteResult> optimizeRoute(List<int> attractionIds, {double? startLat, double? startLon}) async {
+  Future<RouteResult> optimizeRoute(
+    List<int> attractionIds, {
+    double? startLat,
+    double? startLon,
+    String routingProfile = 'driving',
+  }) async {
     try {
       final body = <String, dynamic>{
         'attractionIds': attractionIds,
+        'routingProfile': routingProfile,
       };
       if (startLat != null) body['startLatitude'] = startLat;
       if (startLon != null) body['startLongitude'] = startLon;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../config/app_constants.dart';
+import '../models/verification_status.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -9,127 +10,180 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final user = context.watch<AuthProvider>().currentUser;
 
     if (user == null) return const SizedBox.shrink();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.paddingMedium),
-      child: Column(
-        children: [
-          const SizedBox(height: AppConstants.paddingLarge),
-          CircleAvatar(
-            radius: 48,
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Text(
-              '${user.firstName[0]}${user.lastName[0]}'.toUpperCase(),
-              style: theme.textTheme.headlineMedium?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppConstants.paddingMedium),
-          Text(
-            user.fullName,
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            user.email,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Chip(
-            avatar: Icon(
-              user.role?.name == 'admin' ? Icons.admin_panel_settings : Icons.person,
-              size: 18,
-            ),
-            label: Text(user.role?.toDisplayString() ?? 'User'),
-          ),
-          const SizedBox(height: AppConstants.paddingXLarge),
-
-          _ProfileSection(
-            title: 'Account',
-            children: [
-              _ProfileTile(
-                icon: Icons.person_outline,
-                title: 'Personal Information',
-                subtitle: '${user.firstName} ${user.lastName}',
-                onTap: () {},
-              ),
-              _ProfileTile(
-                icon: Icons.verified_user_outlined,
-                title: 'Identity Verification',
-                subtitle: user.isVerified == true ? 'Verified' : 'Not verified',
-                trailing: Icon(
-                  user.isVerified == true ? Icons.check_circle : Icons.warning_amber,
-                  color: user.isVerified == true
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.error,
-                  size: 20,
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.screenPadding,
+          vertical: AppConstants.paddingSmall,
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: AppConstants.paddingMedium),
+            Container(
+              padding: const EdgeInsets.all(AppConstants.paddingLarge),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.35),
                 ),
-                onTap: () {},
               ),
-            ],
-          ),
-
-          const SizedBox(height: AppConstants.paddingMedium),
-
-          _ProfileSection(
-            title: 'App',
-            children: [
-              _ProfileTile(
-                icon: Icons.info_outline,
-                title: 'About',
-                subtitle: 'Smart City Cluj-Napoca v1.0',
-                onTap: () {},
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppConstants.paddingXLarge),
-
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Logout'),
-                    content: const Text('Are you sure you want to logout?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancel'),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: 0.35),
+                        width: 2,
                       ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Logout'),
+                    ),
+                    child: CircleAvatar(
+                      radius: 44,
+                      backgroundColor: cs.primaryContainer,
+                      child: Text(
+                        '${user.firstName[0]}${user.lastName[0]}'.toUpperCase(),
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          color: cs.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                );
-                if (confirmed == true && context.mounted) {
-                  await context.read<AuthProvider>().logout();
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/login');
-                  }
-                }
-              },
-              icon: Icon(Icons.logout, color: theme.colorScheme.error),
-              label: Text('Logout', style: TextStyle(color: theme.colorScheme.error)),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: theme.colorScheme.error.withValues(alpha: 0.5)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: AppConstants.paddingMedium),
+                  Text(
+                    user.fullName,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    user.email,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Chip(
+                    avatar: Icon(
+                      user.role?.name == 'admin'
+                          ? Icons.admin_panel_settings_outlined
+                          : Icons.person_outline_rounded,
+                      size: 18,
+                      color: cs.primary,
+                    ),
+                    label: Text(user.role?.toDisplayString() ?? 'User'),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: AppConstants.paddingLarge),
-        ],
+            const SizedBox(height: AppConstants.paddingLarge),
+
+            _ProfileSection(
+              title: 'Account',
+              children: [
+                _ProfileTile(
+                  icon: Icons.person_outline_rounded,
+                  title: 'Personal information',
+                  subtitle: '${user.firstName} ${user.lastName}',
+                  onTap: () {},
+                ),
+                _ProfileTile(
+                  icon: Icons.verified_user_outlined,
+                  title: 'Verification',
+                  subtitle: _verificationText(user.verificationStatus),
+                  trailing: Icon(
+                    user.verificationStatus == VerificationStatus.approved
+                        ? Icons.check_circle_rounded
+                        : Icons.pending_actions_rounded,
+                    color: user.verificationStatus == VerificationStatus.approved
+                        ? cs.primary
+                        : cs.tertiary,
+                    size: 22,
+                  ),
+                  onTap: () => Navigator.of(context).pushNamed('/verification'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppConstants.paddingMedium),
+
+            _ProfileSection(
+              title: 'About',
+              children: [
+                _ProfileTile(
+                  icon: Icons.info_outline_rounded,
+                  title: 'App',
+                  subtitle: 'Smart City · Cluj-Napoca · v1.0',
+                  onTap: () {},
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppConstants.paddingXLarge),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      icon: Icon(Icons.logout_rounded, color: cs.error, size: 28),
+                      title: const Text('Sign out?'),
+                      content: Text(
+                        'You’ll need to sign in again to access your profile.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          height: 1.4,
+                        ),
+                      ),
+                      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: cs.error,
+                            foregroundColor: cs.onError,
+                          ),
+                          child: const Text('Sign out'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && context.mounted) {
+                    await context.read<AuthProvider>().logout();
+                    if (context.mounted) {
+                      Navigator.of(context).pushReplacementNamed('/login');
+                    }
+                  }
+                },
+                icon: Icon(Icons.logout_rounded, color: cs.error),
+                label: Text('Sign out', style: TextStyle(color: cs.error, fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: cs.error.withValues(alpha: 0.45)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppConstants.paddingLarge),
+          ],
+        ),
       ),
     );
   }
@@ -143,25 +197,43 @@ class _ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          padding: const EdgeInsets.only(left: 6, bottom: 10),
           child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            title.toUpperCase(),
+            style: theme.textTheme.labelMedium?.copyWith(
               fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              letterSpacing: 0.8,
+              color: cs.onSurfaceVariant,
             ),
           ),
         ),
-        Card(
-          margin: EdgeInsets.zero,
-          child: Column(children: children),
+        Material(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: _withDividers(children, cs),
+          ),
         ),
       ],
     );
+  }
+
+  List<Widget> _withDividers(List<Widget> tiles, ColorScheme cs) {
+    final out = <Widget>[];
+    for (var i = 0; i < tiles.length; i++) {
+      out.add(tiles[i]);
+      if (i < tiles.length - 1) {
+        out.add(Divider(height: 1, indent: 56, color: cs.outline.withValues(alpha: 0.12)));
+      }
+    }
+    return out;
   }
 }
 
@@ -182,12 +254,47 @@ class _ProfileTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return ListTile(
-      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: trailing ?? const Icon(Icons.chevron_right, size: 20),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: cs.primaryContainer.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: cs.primary, size: 22),
+      ),
+      title: Text(
+        title,
+        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: cs.onSurfaceVariant,
+          height: 1.3,
+        ),
+      ),
+      trailing: trailing ?? Icon(Icons.chevron_right_rounded, color: cs.outline, size: 22),
       onTap: onTap,
     );
+  }
+}
+
+String _verificationText(VerificationStatus status) {
+  switch (status) {
+    case VerificationStatus.approved:
+      return 'Approved';
+    case VerificationStatus.rejected:
+      return 'Rejected';
+    case VerificationStatus.manualReview:
+      return 'Manual review';
+    case VerificationStatus.pending:
+      return 'Pending';
+    case VerificationStatus.notSubmitted:
+      return 'Not submitted';
   }
 }

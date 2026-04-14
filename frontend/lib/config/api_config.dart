@@ -26,6 +26,7 @@ class ApiConfig {
 
   static const String authEndpoint = '/auth';
   static const String visitCityEndpoint = '/visit-city';
+  static const String verificationEndpoint = '/verification';
 
   static Map<String, String> getHeaders({String? token, int? userId}) {
     final headers = <String, String>{

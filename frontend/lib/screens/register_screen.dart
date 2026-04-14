@@ -46,98 +46,135 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
     final success = await authProvider.register(request);
     if (success && mounted) {
-      Navigator.of(context).pushReplacementNamed('/home');
+      final user = authProvider.currentUser;
+      if (user != null && user.isVerified != true) {
+        Navigator.of(context).pushReplacementNamed('/verification');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Register')),
-      body: Consumer<AuthProvider>(
-        builder: (context, authProvider, _) {
-          return LoadingOverlay(
-            isLoading: authProvider.isLoading,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppConstants.paddingLarge),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: AppConstants.paddingLarge),
-                    Icon(
-                      Icons.person_add,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    Text(
-                      'Create an account',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: AppConstants.paddingXLarge),
-                    CustomTextField(
-                      label: 'First Name',
-                      hint: 'Your first name',
-                      controller: _firstNameController,
-                      validator: (v) => Validators.required(v, fieldName: 'First name'),
-                      prefixIcon: Icons.badge,
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    CustomTextField(
-                      label: 'Last Name',
-                      hint: 'Your last name',
-                      controller: _lastNameController,
-                      validator: (v) => Validators.required(v, fieldName: 'Last name'),
-                      prefixIcon: Icons.badge,
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    CustomTextField(
-                      label: 'Email',
-                      hint: 'example@email.com',
-                      controller: _emailController,
-                      validator: Validators.email,
-                      keyboardType: TextInputType.emailAddress,
-                      prefixIcon: Icons.email,
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    CustomTextField(
-                      label: 'Password',
-                      hint: 'At least 6 characters',
-                      controller: _passwordController,
-                      validator: Validators.password,
-                      obscureText: true,
-                      prefixIcon: Icons.lock,
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    CustomTextField(
-                      label: 'Phone (optional)',
-                      hint: '07xx xxx xxx',
-                      controller: _phoneController,
-                      validator: (v) => Validators.phone(v),
-                      keyboardType: TextInputType.phone,
-                      prefixIcon: Icons.phone,
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    ErrorMessage(message: authProvider.errorMessage),
-                    const SizedBox(height: AppConstants.paddingLarge),
-                    ElevatedButton(
-                      onPressed: authProvider.isLoading ? null : _handleRegister,
-                      child: const Text('Register'),
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-                      child: const Text('Already have an account? Login'),
-                    ),
-                  ],
+      appBar: AppBar(
+        title: const Text('Create account'),
+      ),
+      body: SafeArea(
+        child: Consumer<AuthProvider>(
+          builder: (context, authProvider, _) {
+            return LoadingOverlay(
+              isLoading: authProvider.isLoading,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.screenPadding,
+                  vertical: AppConstants.paddingMedium,
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer.withValues(alpha: 0.55),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.person_add_rounded,
+                            size: 38,
+                            color: cs.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingLarge),
+                      Text(
+                        'Join Smart City',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'A few details and you’re ready to explore.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppConstants.paddingXLarge),
+                      CustomTextField(
+                        label: 'First name',
+                        hint: 'Ion',
+                        controller: _firstNameController,
+                        validator: (v) => Validators.required(v, fieldName: 'First name'),
+                        prefixIcon: Icons.badge_outlined,
+                      ),
+                      const SizedBox(height: AppConstants.paddingMedium),
+                      CustomTextField(
+                        label: 'Last name',
+                        hint: 'Popescu',
+                        controller: _lastNameController,
+                        validator: (v) => Validators.required(v, fieldName: 'Last name'),
+                        prefixIcon: Icons.badge_outlined,
+                      ),
+                      const SizedBox(height: AppConstants.paddingMedium),
+                      CustomTextField(
+                        label: 'Email',
+                        hint: 'you@example.com',
+                        controller: _emailController,
+                        validator: Validators.email,
+                        keyboardType: TextInputType.emailAddress,
+                        prefixIcon: Icons.mail_outline_rounded,
+                      ),
+                      const SizedBox(height: AppConstants.paddingMedium),
+                      CustomTextField(
+                        label: 'Password',
+                        hint: 'At least 6 characters',
+                        controller: _passwordController,
+                        validator: Validators.password,
+                        obscureText: true,
+                        prefixIcon: Icons.lock_outline_rounded,
+                      ),
+                      const SizedBox(height: AppConstants.paddingMedium),
+                      CustomTextField(
+                        label: 'Phone (optional)',
+                        hint: '07xx xxx xxx',
+                        controller: _phoneController,
+                        validator: (v) => Validators.phone(v),
+                        keyboardType: TextInputType.phone,
+                        prefixIcon: Icons.phone_outlined,
+                      ),
+                      const SizedBox(height: AppConstants.paddingMedium),
+                      ErrorMessage(message: authProvider.errorMessage),
+                      const SizedBox(height: AppConstants.paddingLarge),
+                      FilledButton(
+                        onPressed: authProvider.isLoading ? null : _handleRegister,
+                        child: const Text('Create account'),
+                      ),
+                      const SizedBox(height: AppConstants.paddingMedium),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
+                        child: const Text('Already have an account? Sign in'),
+                      ),
+                      const SizedBox(height: AppConstants.paddingLarge),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

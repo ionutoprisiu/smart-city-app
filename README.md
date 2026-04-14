@@ -1,66 +1,108 @@
 # Smart City App
 
-A full-stack application that digitizes and simplifies interactions between citizens and their urban environment. It provides:
+Full-stack application focused on **Visit City (smart tourism)**: attractions from the database (plus optional OSM live refresh), selection on the map, and **optimal walking/driving route** via **ACO** + **OSRM**.
 
-* **Mobility & Parking** — Parking payments via an integrated virtual wallet.
-* **Civic Engagement (Issues)** — Report local problems (potholes, broken street lights) with photo evidence to city operators.
-* **Smart Tourism (Visit City)** — Explore city attractions, select multiple points on a map, and get an **optimal walking/driving route** computed by an **Ant Colony Optimization (ACO)** service, with **OSRM** for real-road distances and route geometry.
-
-The stack: **Java Spring Boot** backend, **Python FastAPI** ACO service (with OSRM), **Flutter** mobile frontend, **PostgreSQL** database.
+**Stack:** FastAPI (API + DB), FastAPI (ACO + OSRM), FastAPI (verification), Flutter (iOS/Android), PostgreSQL.
 
 ---
 
-## Structure
+## Project Structure
 
 ```
 licenta-app/
-├── backend/          # Spring Boot (port 8080) — API, auth, DB, Visit City orchestration
-├── frontend/         # Flutter app (iOS / Android) — Visit City list + map, auth, home
-└── aco-service/      # Python FastAPI (port 8000) — ACO route optimization + OSRM
+├── backend/          # FastAPI (port 8080) — auth + Visit City
+├── frontend/         # Flutter — Visit City + map + auth
+├── aco-service/      # ACO + OSRM (port 8000)
+├── verification-service/ # ID card + selfie verification (port 8090)
+└── docker-compose.yml
 ```
 
 ---
 
 ## Visit City — How It Works
 
-1. **Attractions** — Loaded from the database; optionally refreshed in the background from **Overpass (OpenStreetMap)** for the city area (e.g. Cluj-Napoca). Search and category filters apply to the list.
-2. **Map** — User sees attractions (with clustering when no route is selected), can add **custom pins** (long-press), and **add/remove attractions to the route** via the bottom sheet (“Add to route” / “Remove from route”).
-3. **Optimize** — When at least 2 attractions (or 1 + user location) are selected, **Optimize** sends the selection to the backend. The backend calls the **ACO service**, which:
-   - Builds a **distance matrix** via **OSRM Table API** (real-road distances; fallback: Haversine).
-   - Runs **ACO** to find the **order of visits** that minimizes total distance.
-   - Fetches **route geometry** per leg via **OSRM Route API** (polylines on the road).
-4. **Start / Modify** — After optimization, the user can **Start** the route (map shows only route markers and polyline) or **Modify** to change selection and re-optimize. **Clear** removes the route and selection.
-
-**Tech:** ACO in `aco-service/aco_algorithm.py`; OSRM in `aco-service/distance_calculator.py` (Table + Route APIs). Backend: `VisitCityController`, `VisitCityService`, `RouteOptimizationService`; frontend: `VisitCityProvider`, `VisitCityRepository`, `MapScreen`, `VisitCityScreen`.
+1. **Attractions** — From the DB; optional live merge from **Overpass** (Cluj-Napoca area).
+2. **Map** — Clustering, custom pins, add/remove attractions to the route.
+3. **Optimize** — Sends selection to `backend` → **ACO service** (OSRM Table + Route, or Haversine fallback).
+4. **Start / Modify** — After optimization, the user can start the route or change selection.
 
 ---
 
 ## Quick Start
 
-### 1. Database (PostgreSQL)
+### Prerequisites
 
-Create a database (e.g. `licenta_db`). Credentials via environment or local config (see [Configuration](#configuration)).
+- Python 3.11+
+- PostgreSQL (`licenta_db`)
+- Flutter SDK
 
-### 2. Backend
+### Order (local)
+
+1. PostgreSQL
+2. **ACO** (port 8000)
+3. **Verification Service** (port 8090)
+4. **Backend** (port 8080)
+5. **Flutter**
+
+### 1. Database
 
 ```bash
-cd backend
-./mvnw spring-boot:run
+createdb licenta_db
 ```
 
-Runs on **http://localhost:8080**. API base path: `/api`.
+Tables are created at backend startup (`create_all`).
 
-### 3. ACO Service
+### 2. ACO Service
 
 ```bash
 cd aco-service
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python main.py
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Runs on **http://localhost:8000**. Endpoint: `POST /optimize`.
+Runs on **http://localhost:8000**. Health: `GET /health`. Route: `POST /optimize`.
 
-### 4. Frontend
+### 3. Backend
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8080
+```
+
+Runs on **http://localhost:8080**. Docs: `http://localhost:8080/docs`.
+
+`backend/.env`:
+
+```env
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/licenta_db
+ACO_SERVICE_URL=http://localhost:8000
+VERIFICATION_SERVICE_URL=http://localhost:8090
+CORS_ORIGINS_RAW=*
+```
+
+Local admin seed (optional, enabled by default in current backend config):
+
+```env
+SEED_ADMIN_USER=true
+ADMIN_USER_EMAIL=admin@admin.com
+ADMIN_USER_PASSWORD=admin
+```
+
+### 4. Verification Service
+
+```bash
+cd verification-service
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8090
+```
+
+Runs on **http://localhost:8090**. Health: `GET /health`. Verify: `POST /verify`.
+
+### 5. Frontend
 
 ```bash
 cd frontend
@@ -68,49 +110,32 @@ flutter pub get
 flutter run
 ```
 
-For a **physical iOS device** (same Wi‑Fi as your machine), pass your machine’s IP:
+| Platform | Backend URL |
+|----------|-------------|
+| iOS Simulator (physical) | `http://<LOCAL_IP>:8080/api` |
+| Android Emulator | `10.0.2.2:8080` |
+| macOS | `127.0.0.1:8080` |
 
-```bash
-flutter run --dart-define=LOCAL_IP=192.168.X.X
-```
+### Docker (full stack)
 
-Alternatively, set the IP in `frontend/lib/config/api_config.dart` (do **not** commit it if the repo is public).
+1. Copy `.env.example` to `.env` at repo root.
+2. Optional OSRM prep: `docker compose --profile osrm-prepare up osrm-prepare-foot osrm-prepare-driving`
+3. `docker compose up --build`
 
----
-
-## Configuration
-
-### Backend
-
-- **Database:** Copy `backend/src/main/resources/application-example.properties` to `application-local.properties` (gitignored) and set `DB_USERNAME` and `DB_PASSWORD`, or set the `DB_USERNAME` and `DB_PASSWORD` environment variables.
-- **ACO service URL** in `application.properties`:
-  ```properties
-  aco.service.url=http://localhost:8000
-  ```
-
-### Frontend
-
-- **API base URL:** `frontend/lib/config/api_config.dart` — uses `LOCAL_IP` for iOS, `10.0.2.2` for Android emulator, `127.0.0.1` for macOS.
-
-### ACO Service
-
-- **OSRM:** Uses public `https://router.project-osrm.org` (Table + Route). No API key required. For production you may run your own OSRM instance and change `OSRM_BASE_URL` in `aco-service/distance_calculator.py`.
+Dacă în Docker Desktop apar containere oprite (resturi vechi): `docker container prune -f`.
 
 ---
 
-## API Overview
+## API (what the app uses)
 
-| Area        | Backend (port 8080)     | ACO (port 8000)   |
-|------------|--------------------------|-------------------|
-| Auth       | `POST /api/auth/login`, `.../register` | —                 |
-| Visit City | `GET /api/visit-city/attractions`, `.../attractions/live`, `POST .../optimize` | `POST /optimize`  |
-| Parking    | `/api/parking/...`       | —                 |
-| Issues     | `/api/issues/...`        | —                 |
-
-The backend forwards optimization requests to the ACO service and enriches the response (e.g. attraction names from the DB).
+| Area | Backend (8080) | ACO (8000) | Verification (8090) |
+|------|----------------|------------|---------------------|
+| Auth | `POST /api/auth/register`, `POST /api/auth/login` | — | — |
+| Visit City | `GET /api/visit-city/attractions`, `.../live`, `POST .../optimize` | `POST /optimize` | — |
+| Verification | `POST /api/verification/submit`, `GET /api/verification/status/{user_id}` | — | `POST /verify` |
 
 ---
 
 ## License
 
-Private / educational use as appropriate for your thesis (licență).
+Private / educational use (thesis project).

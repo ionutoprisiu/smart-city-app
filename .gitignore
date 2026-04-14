@@ -1,20 +1,25 @@
-# IDE
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── IDE ──
 .idea/
-*.iml
+.vscode/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# Build outputs
-target/
-build/
-dist/
-*.class
-*.jar
-*.war
+# ── Python (backend + aco-service) ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
 
-# Flutter
+# ── Flutter / Dart (frontend) ──
 frontend/.dart_tool/
 frontend/.flutter-plugins
 frontend/.flutter-plugins-dependencies
@@ -25,40 +30,26 @@ frontend/build/
 frontend/.ios/
 frontend/.android/
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
+# ── Build artifacts ──
+build/
+dist/
+target/
 
-# Logs
+# ── Environment / secrets ──
+.env
+.env.local
+.env.production
+
+# ── OSRM preprocessed data (large, local-only) ──
+osrm-data/
+
+# ── Documentation (personal, not part of source) ──
+documentation/
+
+# ── Logs ──
 *.log
 logs/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Personal documents (do not commit)
-.docs/
-documentation/
-*.doc
-*.docx
-*.pdf
-
-# Local config (credentials — do not commit)
-**/application-local.properties
-**/application-local.yml
-backend/src/main/resources/application-local.properties
-
-# Environment variables
-.env
-.env.local
-
-# Temporary files
+# ── Temporary ──
 *.tmp
 *.temp

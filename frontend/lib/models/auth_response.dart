@@ -1,5 +1,6 @@
 import 'user.dart';
 import 'role.dart';
+import 'verification_status.dart';
 
 class AuthResponse {
   final int userId;
@@ -8,6 +9,7 @@ class AuthResponse {
   final String firstName;
   final String lastName;
   final bool? isVerified;
+  final VerificationStatus verificationStatus;
   final String message;
 
   AuthResponse({
@@ -17,6 +19,7 @@ class AuthResponse {
     required this.firstName,
     required this.lastName,
     this.isVerified,
+    this.verificationStatus = VerificationStatus.notSubmitted,
     required this.message,
   });
 
@@ -28,6 +31,7 @@ class AuthResponse {
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       isVerified: json['isVerified'],
+      verificationStatus: verificationStatusFromString(json['verificationStatus']?.toString()),
       message: json['message'] ?? '',
     );
   }
@@ -40,6 +44,7 @@ class AuthResponse {
       lastName: lastName,
       role: role,
       isVerified: isVerified,
+      verificationStatus: verificationStatus,
     );
   }
 }

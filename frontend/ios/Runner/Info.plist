@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>We need camera access to photograph reported issues</string>
+	<string>We need camera access to capture your ID card and selfie for identity verification</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>We need your location to report issues at the correct location and for the "Visit the City" feature</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

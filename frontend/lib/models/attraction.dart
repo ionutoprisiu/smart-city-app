@@ -70,7 +70,6 @@ class Attraction {
   final String city;
   final AttractionCategory category;
   final String? imageUrl;
-  final int estimatedVisitTime;
   final bool isActive;
 
   Attraction({
@@ -82,7 +81,6 @@ class Attraction {
     required this.city,
     required this.category,
     this.imageUrl,
-    required this.estimatedVisitTime,
     required this.isActive,
   });
 
@@ -96,7 +94,6 @@ class Attraction {
       city: json['city'] ?? '',
       category: AttractionCategory.fromString(json['category']?.toString()),
       imageUrl: json['imageUrl'],
-      estimatedVisitTime: json['estimatedVisitTime'] ?? 30,
       isActive: json['isActive'] ?? true,
     );
   }

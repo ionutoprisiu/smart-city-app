@@ -1,4 +1,5 @@
 import 'role.dart';
+import 'verification_status.dart';
 
 class User {
   final int id;
@@ -7,6 +8,7 @@ class User {
   final String lastName;
   final Role? role;
   final bool? isVerified;
+  final VerificationStatus verificationStatus;
 
   User({
     required this.id,
@@ -15,6 +17,7 @@ class User {
     required this.lastName,
     this.role,
     this.isVerified,
+    this.verificationStatus = VerificationStatus.notSubmitted,
   });
 
   String get fullName => '$firstName $lastName';
@@ -27,6 +30,7 @@ class User {
       lastName: json['lastName'] ?? '',
       role: Role.fromString(json['role']?.toString()),
       isVerified: json['isVerified'],
+      verificationStatus: verificationStatusFromString(json['verificationStatus']?.toString()),
     );
   }
 
@@ -38,6 +42,7 @@ class User {
       'lastName': lastName,
       'role': role?.name,
       'isVerified': isVerified,
+      'verificationStatus': verificationStatusToApi(verificationStatus),
     };
   }
 
@@ -48,6 +53,7 @@ class User {
     String? lastName,
     Role? role,
     bool? isVerified,
+    VerificationStatus? verificationStatus,
   }) {
     return User(
       id: id ?? this.id,
@@ -56,6 +62,7 @@ class User {
       lastName: lastName ?? this.lastName,
       role: role ?? this.role,
       isVerified: isVerified ?? this.isVerified,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
     );
   }
 }

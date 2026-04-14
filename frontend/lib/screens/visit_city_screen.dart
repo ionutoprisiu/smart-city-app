@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/attraction.dart';
 import '../providers/visit_city_provider.dart';
 import '../config/app_constants.dart';
+import '../services/address_service.dart';
 import '../widgets/error_message.dart';
 import 'map_screen.dart';
+
+enum _QuickFilter { all, selected, culture, foodAndDrink }
 
 class VisitCityScreen extends StatefulWidget {
   const VisitCityScreen({super.key});
@@ -15,7 +20,11 @@ class VisitCityScreen extends StatefulWidget {
 
 class _VisitCityScreenState extends State<VisitCityScreen> {
   final _searchController = TextEditingController();
+  Timer? _searchDebounce;
   bool _showMap = false;
+  _QuickFilter _quickFilter = _QuickFilter.all;
+  static const int _pageSize = 30;
+  int _visibleCount = _pageSize;
 
   @override
   void initState() {
@@ -27,6 +36,7 @@ class _VisitCityScreenState extends State<VisitCityScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -36,10 +46,11 @@ class _VisitCityScreenState extends State<VisitCityScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_showMap ? 'Map' : 'Visit City'),
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: Icon(_showMap ? Icons.list : Icons.map),
-            tooltip: _showMap ? 'Show list' : 'Show map',
+            icon: Icon(_showMap ? Icons.view_list_rounded : Icons.map_outlined),
+            tooltip: _showMap ? 'List' : 'Map',
             onPressed: () => setState(() => _showMap = !_showMap),
           ),
         ],
@@ -51,38 +62,63 @@ class _VisitCityScreenState extends State<VisitCityScreen> {
   Widget _buildListView() {
     return Consumer<VisitCityProvider>(
       builder: (context, provider, _) {
+        final theme = Theme.of(context);
+        final cs = theme.colorScheme;
+        final filteredAttractions = _applyQuickFilter(provider);
+        final visibleCount = filteredAttractions.length < _visibleCount
+            ? filteredAttractions.length
+            : _visibleCount;
+        final visibleAttractions = filteredAttractions
+            .take(visibleCount)
+            .toList();
+
         return CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(AppConstants.paddingMedium),
+                padding: const EdgeInsets.fromLTRB(
+                  AppConstants.screenPadding,
+                  AppConstants.paddingMedium,
+                  AppConstants.screenPadding,
+                  AppConstants.paddingSmall,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Explore Cluj-Napoca',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
-                      '${provider.attractions.length} attractions',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      '${filteredAttractions.length} places to discover'
+                      '${filteredAttractions.length != provider.attractions.length ? ' • filtered from ${provider.attractions.length}' : ''}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.35,
                       ),
                     ),
+                    const SizedBox(height: AppConstants.paddingLarge),
+                    _buildSearchBar(context, provider),
                     const SizedBox(height: AppConstants.paddingMedium),
-                    _buildSearchBar(provider),
-                    const SizedBox(height: AppConstants.paddingSmall),
                     _buildCategoryChips(provider),
+                    const SizedBox(height: AppConstants.paddingSmall),
+                    _buildQuickFilterChips(provider),
                   ],
                 ),
               ),
             ),
             if (provider.isLoading)
               const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                ),
               )
             else if (provider.errorMessage != null)
               SliverFillRemaining(
@@ -91,32 +127,60 @@ class _VisitCityScreenState extends State<VisitCityScreen> {
                   onRetry: provider.loadAttractions,
                 ),
               )
-            else if (provider.attractions.isEmpty)
+            else if (filteredAttractions.isEmpty)
               SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.search_off, size: 64,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      const SizedBox(height: 12),
-                      Text('No attractions found',
-                          style: Theme.of(context).textTheme.bodyLarge),
-                    ],
-                  ),
+                child: _EmptyState(
+                  icon: Icons.travel_explore_outlined,
+                  title: 'Nothing here yet',
+                  subtitle:
+                      'Try another search, change category, or clear filters.',
                 ),
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.paddingMedium,
+                padding: const EdgeInsets.fromLTRB(
+                  AppConstants.screenPadding,
+                  0,
+                  AppConstants.screenPadding,
+                  AppConstants.paddingXLarge,
                 ),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => _AttractionCard(
-                      attraction: provider.attractions[index],
+                    (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _AttractionCard(
+                        attraction: visibleAttractions[index],
+                        isSelected: provider.isSelected(
+                          visibleAttractions[index].id,
+                        ),
+                        onToggleSelection: () => provider.toggleSelection(
+                          visibleAttractions[index].id,
+                        ),
+                      ),
                     ),
-                    childCount: provider.attractions.length,
+                    childCount: visibleAttractions.length,
+                  ),
+                ),
+              ),
+            if (filteredAttractions.length > visibleCount)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppConstants.screenPadding,
+                    4,
+                    AppConstants.screenPadding,
+                    AppConstants.paddingXLarge,
+                  ),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _visibleCount += _pageSize;
+                      });
+                    },
+                    icon: const Icon(Icons.expand_more_rounded),
+                    label: Text(
+                      'Show more (${filteredAttractions.length - visibleCount} left)',
+                    ),
                   ),
                 ),
               ),
@@ -126,22 +190,41 @@ class _VisitCityScreenState extends State<VisitCityScreen> {
     );
   }
 
-  Widget _buildSearchBar(VisitCityProvider provider) {
-    return TextField(
-      controller: _searchController,
-      onSubmitted: (value) => provider.search(value),
-      decoration: InputDecoration(
-        hintText: 'Search attractions...',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: _searchController.text.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  _searchController.clear();
-                  provider.clearFilters();
-                },
-              )
-            : null,
+  Widget _buildSearchBar(BuildContext context, VisitCityProvider provider) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerLow.withValues(alpha: 0.9),
+      borderRadius: BorderRadius.circular(AppConstants.borderRadiusXLarge),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) => _onSearchChanged(provider, value),
+        onSubmitted: (value) =>
+            _onSearchChanged(provider, value, immediate: true),
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Search museums, parks…',
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: cs.primary.withValues(alpha: 0.85),
+          ),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
+                  onPressed: () {
+                    _searchController.clear();
+                    provider.clearFilters();
+                    _quickFilter = _QuickFilter.all;
+                    _visibleCount = _pageSize;
+                    setState(() {});
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 14,
+          ),
+        ),
       ),
     );
   }
@@ -157,22 +240,167 @@ class _VisitCityScreenState extends State<VisitCityScreen> {
     ];
 
     return SizedBox(
-      height: 42,
+      height: 46,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: categories.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final cat = categories[index];
           final isSelected = provider.selectedCategory == cat;
           return FilterChip(
-            label: Text('${cat.icon} ${cat.label}'),
+            label: Text('${cat.icon}  ${cat.label}'),
             selected: isSelected,
+            showCheckmark: false,
             onSelected: (_) {
               provider.filterByCategory(isSelected ? null : cat);
+              _visibleCount = _pageSize;
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildQuickFilterChips(VisitCityProvider provider) {
+    final items = <(_QuickFilter, String)>[
+      (_QuickFilter.all, 'All'),
+      (_QuickFilter.selected, 'Selected (${provider.selectedCount})'),
+      (_QuickFilter.culture, 'Culture'),
+      (_QuickFilter.foodAndDrink, 'Food'),
+    ];
+
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final selected = _quickFilter == item.$1;
+          return ChoiceChip(
+            label: Text(item.$2),
+            selected: selected,
+            showCheckmark: false,
+            onSelected: (_) {
+              setState(() {
+                _quickFilter = item.$1;
+                _visibleCount = _pageSize;
+              });
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  List<Attraction> _applyQuickFilter(VisitCityProvider provider) {
+    final source = List<Attraction>.from(provider.attractions);
+    final selectedIds = provider.selectedIds;
+
+    bool matchesQuickFilter(Attraction a) {
+      switch (_quickFilter) {
+        case _QuickFilter.all:
+          return true;
+        case _QuickFilter.selected:
+          return selectedIds.contains(a.id);
+        case _QuickFilter.culture:
+          return a.category == AttractionCategory.museum ||
+              a.category == AttractionCategory.church ||
+              a.category == AttractionCategory.monument ||
+              a.category == AttractionCategory.theater ||
+              a.category == AttractionCategory.library ||
+              a.category == AttractionCategory.square;
+        case _QuickFilter.foodAndDrink:
+          return a.category == AttractionCategory.restaurant ||
+              a.category == AttractionCategory.cafe;
+      }
+    }
+
+    final filtered = source.where(matchesQuickFilter).toList();
+    filtered.sort((a, b) {
+      final aSelected = selectedIds.contains(a.id);
+      final bSelected = selectedIds.contains(b.id);
+      if (aSelected != bSelected) return aSelected ? -1 : 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return filtered;
+  }
+
+  void _onSearchChanged(
+    VisitCityProvider provider,
+    String value, {
+    bool immediate = false,
+  }) {
+    _searchDebounce?.cancel();
+    if (immediate) {
+      provider.search(value.trim());
+      setState(() {
+        _visibleCount = _pageSize;
+      });
+      return;
+    }
+    setState(() {});
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      provider.search(value.trim());
+      if (mounted) {
+        setState(() {
+          _visibleCount = _pageSize;
+        });
+      }
+    });
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.paddingXLarge),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 40, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppConstants.paddingLarge),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -180,33 +408,46 @@ class _VisitCityScreenState extends State<VisitCityScreen> {
 
 class _AttractionCard extends StatelessWidget {
   final Attraction attraction;
+  final bool isSelected;
+  final VoidCallback onToggleSelection;
 
-  const _AttractionCard({required this.attraction});
+  const _AttractionCard({
+    required this.attraction,
+    required this.isSelected,
+    required this.onToggleSelection,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.paddingSmall),
+    return Material(
+      color: isSelected
+          ? cs.primaryContainer.withValues(alpha: 0.55)
+          : cs.surfaceContainerHighest.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         onTap: () => _showDetails(context),
         child: Padding(
           padding: const EdgeInsets.all(AppConstants.paddingMedium),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                  color: cs.primaryContainer.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(
+                    AppConstants.borderRadiusLarge,
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   attraction.category.icon,
-                  style: const TextStyle(fontSize: 24),
+                  style: const TextStyle(fontSize: 26),
                 ),
               ),
               const SizedBox(width: AppConstants.paddingMedium),
@@ -218,31 +459,48 @@ class _AttractionCard extends StatelessWidget {
                       attraction.name,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
+                        height: 1.25,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      attraction.description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                    const SizedBox(height: 4),
+                    FutureBuilder<String>(
+                      future: AddressService.streetFromCoordinates(
+                        latitude: attraction.latitude,
+                        longitude: attraction.longitude,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      builder: (context, snapshot) {
+                        final street = snapshot.data ?? 'Loading street...';
+                        return Text(
+                          street,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            height: 1.35,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Column(
-                children: [
-                  Icon(Icons.schedule, size: 16,
-                      color: theme.colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${attraction.estimatedVisitTime}m',
-                    style: theme.textTheme.labelSmall,
-                  ),
-                ],
+              IconButton.filledTonal(
+                onPressed: onToggleSelection,
+                style: IconButton.styleFrom(
+                  backgroundColor: isSelected
+                      ? cs.primary
+                      : cs.surfaceContainerLow,
+                  foregroundColor: isSelected
+                      ? cs.onPrimary
+                      : cs.onSurfaceVariant,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(8),
+                ),
+                icon: Icon(
+                  isSelected ? Icons.check_rounded : Icons.add_rounded,
+                  size: 18,
+                ),
               ),
             ],
           ),
@@ -253,63 +511,96 @@ class _AttractionCard extends StatelessWidget {
 
   void _showDetails(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      showDragHandle: true,
       builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.45,
-        minChildSize: 0.3,
-        maxChildSize: 0.7,
+        initialChildSize: 0.48,
+        minChildSize: 0.32,
+        maxChildSize: 0.88,
         expand: false,
         builder: (context, scrollController) {
           return SingleChildScrollView(
             controller: scrollController,
-            padding: const EdgeInsets.all(AppConstants.paddingLarge),
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.screenPadding,
+              8,
+              AppConstants.screenPadding,
+              AppConstants.paddingXLarge,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    margin: const EdgeInsets.only(bottom: 20),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(attraction.category.icon, style: const TextStyle(fontSize: 32)),
-                    const SizedBox(width: 12),
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.borderRadiusLarge,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        attraction.category.icon,
+                        style: const TextStyle(fontSize: 28),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Text(
                         attraction.name,
                         style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Chip(label: Text(attraction.category.label)),
+                const SizedBox(height: 14),
+                Chip(
+                  label: Text(attraction.category.label),
+                  avatar: Icon(
+                    Icons.category_outlined,
+                    size: 18,
+                    color: cs.primary,
+                  ),
+                ),
                 const SizedBox(height: AppConstants.paddingMedium),
                 Text(
                   attraction.description,
-                  style: theme.textTheme.bodyLarge,
+                  style: theme.textTheme.bodyLarge?.copyWith(height: 1.45),
                 ),
                 const SizedBox(height: AppConstants.paddingLarge),
-                Row(
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 12,
                   children: [
-                    _detailItem(context, Icons.schedule,
-                        '${attraction.estimatedVisitTime} min'),
-                    const SizedBox(width: 24),
-                    _detailItem(context, Icons.location_on,
-                        '${attraction.latitude.toStringAsFixed(4)}, ${attraction.longitude.toStringAsFixed(4)}'),
+                    FutureBuilder<String>(
+                      future: AddressService.streetFromCoordinates(
+                        latitude: attraction.latitude,
+                        longitude: attraction.longitude,
+                      ),
+                      builder: (context, snapshot) {
+                        final street = snapshot.data ?? 'Loading street...';
+                        return _detailItem(
+                          context,
+                          Icons.signpost_outlined,
+                          street,
+                        );
+                      },
+                    ),
+                    _detailItem(
+                      context,
+                      Icons.location_on_outlined,
+                      '${attraction.latitude.toStringAsFixed(4)}, ${attraction.longitude.toStringAsFixed(4)}',
+                    ),
                   ],
                 ),
               ],
@@ -321,12 +612,20 @@ class _AttractionCard extends StatelessWidget {
   }
 
   Widget _detailItem(BuildContext context, IconData icon, String text) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 6),
-        Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        Icon(icon, size: 20, color: cs.primary),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            text,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.35),
+          ),
+        ),
       ],
     );
   }

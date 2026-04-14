@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/attraction.dart';
@@ -21,11 +23,15 @@ class VisitCityProvider extends ChangeNotifier {
   bool _routeStarted = false;
 
   Position? _userPosition;
+  StreamSubscription<Position>? _positionSubscription;
 
   int _customPinCounter = 0;
 
+  /// OSRM: `driving` (car) or `foot` (pedestrian, paths/sidewalks).
+  String _routingProfile = 'driving';
+
   VisitCityProvider({VisitCityRepository? repository})
-      : _repository = repository ?? VisitCityRepository();
+    : _repository = repository ?? VisitCityRepository();
 
   List<Attraction> get attractions => _attractions;
   List<Attraction> get customPins => _customPins;
@@ -41,6 +47,20 @@ class VisitCityProvider extends ChangeNotifier {
   int get selectedCount => _selectedIds.length;
   Position? get userPosition => _userPosition;
   bool get hasLocation => _userPosition != null;
+
+  String get routingProfile => _routingProfile;
+
+  /// Sets driving vs walking. If a route is already computed, recalculates (like Google Maps).
+  Future<void> setRoutingProfile(String profile) async {
+    final p = profile.toLowerCase();
+    if (p != 'driving' && p != 'foot') return;
+    if (_routingProfile == p) return;
+    _routingProfile = p;
+    notifyListeners();
+    if (_routeResult != null && canOptimize) {
+      await optimizeRoute();
+    }
+  }
 
   bool isSelected(int id) => _selectedIds.contains(id);
 
@@ -59,6 +79,7 @@ class VisitCityProvider extends ChangeNotifier {
     }
     _routeStarted = false;
     _routeResult = null;
+    _stopLiveTracking();
     notifyListeners();
   }
 
@@ -66,6 +87,7 @@ class VisitCityProvider extends ChangeNotifier {
     _selectedIds.clear();
     _routeStarted = false;
     _routeResult = null;
+    _stopLiveTracking();
     notifyListeners();
   }
 
@@ -82,7 +104,9 @@ class VisitCityProvider extends ChangeNotifier {
       }
 
       _userPosition = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       notifyListeners();
     } catch (e) {
@@ -102,9 +126,7 @@ class VisitCityProvider extends ChangeNotifier {
           query: _searchQuery.isEmpty ? null : _searchQuery,
         );
       } else if (_searchQuery.isNotEmpty) {
-        _attractions = await _repository.getAttractions(
-          query: _searchQuery,
-        );
+        _attractions = await _repository.getAttractions(query: _searchQuery);
       } else {
         // Fast first paint: show local DB attractions immediately,
         // then refresh with live Overpass data in background.
@@ -159,7 +181,12 @@ class VisitCityProvider extends ChangeNotifier {
         backendIds,
         startLat: _userPosition?.latitude,
         startLon: _userPosition?.longitude,
+        routingProfile: _routingProfile,
       );
+      // Keep UI mode in sync with server (source of truth for what was optimized).
+      if (_routeResult != null) {
+        _routingProfile = _routeResult!.routingProfile;
+      }
       _routeStarted = false;
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -172,6 +199,7 @@ class VisitCityProvider extends ChangeNotifier {
 
   void clearRoute() {
     _routeStarted = false;
+    _stopLiveTracking();
     _routeResult = null;
     notifyListeners();
   }
@@ -179,27 +207,30 @@ class VisitCityProvider extends ChangeNotifier {
   void startRoute() {
     if (_routeResult == null) return;
     _routeStarted = true;
+    _startLiveTracking();
     notifyListeners();
   }
 
   void stopRoute() {
     _routeStarted = false;
+    _stopLiveTracking();
     notifyListeners();
   }
 
   void addCustomPin(double lat, double lon) {
     _customPinCounter++;
-    _customPins.add(Attraction(
-      id: -_customPinCounter,
-      name: 'Custom Pin $_customPinCounter',
-      description: 'Custom location added by you',
-      latitude: lat,
-      longitude: lon,
-      city: 'Cluj-Napoca',
-      category: AttractionCategory.other,
-      estimatedVisitTime: 30,
-      isActive: true,
-    ));
+    _customPins.add(
+      Attraction(
+        id: -_customPinCounter,
+        name: 'Custom Pin $_customPinCounter',
+        description: 'Custom location added by you',
+        latitude: lat,
+        longitude: lon,
+        city: 'Cluj-Napoca',
+        category: AttractionCategory.other,
+        isActive: true,
+      ),
+    );
     notifyListeners();
   }
 
@@ -224,5 +255,35 @@ class VisitCityProvider extends ChangeNotifier {
     _selectedCategory = null;
     _searchQuery = '';
     loadAttractions();
+  }
+
+  void _startLiveTracking() {
+    _stopLiveTracking();
+    _positionSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 3,
+          ),
+        ).listen(
+          (pos) {
+            _userPosition = pos;
+            notifyListeners();
+          },
+          onError: (e) {
+            Logger.warning('Live tracking stream error: $e');
+          },
+        );
+  }
+
+  void _stopLiveTracking() {
+    _positionSubscription?.cancel();
+    _positionSubscription = null;
+  }
+
+  @override
+  void dispose() {
+    _stopLiveTracking();
+    super.dispose();
   }
 }
