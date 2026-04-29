@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_db
+from app.api.deps import get_db
 from app.schemas.visit_city import OptimizeRouteBody
 from app.services import visit_city_service
 

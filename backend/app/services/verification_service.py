@@ -1,11 +1,15 @@
+"""Orchestrates identity verification: calls the integration client and persists the result."""
+
+from __future__ import annotations
+
 import json
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.integrations import verification_client
+from app.integrations.verification_client import VerificationServiceError
 from app.models.enums import VerificationStatus
 from app.models.user import User
 from app.schemas.verification import VerificationStatusResponse, VerificationSubmitResponse
@@ -31,28 +35,17 @@ async def submit_verification(
         raise ValueError("User not found")
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{settings.verification_service_url}/verify",
-                data={"userId": str(user_id)},
-                files={
-                    "idCardImage": (id_card_filename, id_card_bytes, "image/jpeg"),
-                    "selfieImage": (selfie_filename, selfie_bytes, "image/jpeg"),
-                },
-            )
-    except httpx.HTTPError as exc:
-        raise RuntimeError("Verification service unavailable") from exc
+        data: dict[str, Any] = await verification_client.submit(
+            user_id=user_id,
+            id_card_filename=id_card_filename,
+            id_card_bytes=id_card_bytes,
+            selfie_filename=selfie_filename,
+            selfie_bytes=selfie_bytes,
+        )
+    except VerificationServiceError as exc:
+        # Re-raise as RuntimeError so the API layer can map to a sensible HTTP code.
+        raise RuntimeError(str(exc)) from exc
 
-    if resp.status_code >= 400:
-        message = "Verification failed"
-        try:
-            details = resp.json()
-            message = details.get("detail", message)
-        except Exception:
-            pass
-        raise RuntimeError(message)
-
-    data: dict[str, Any] = resp.json()
     status = _status_from_remote(str(data.get("status", VerificationStatus.REJECTED.value)))
     score = data.get("score")
     reason = str(data.get("reason", "Verification processed"))

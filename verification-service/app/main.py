@@ -1,40 +1,25 @@
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from contextlib import asynccontextmanager
 
-from app.schemas import VerificationResponse
-from app.verification_engine import verify_identity, warm_up_models
+from fastapi import FastAPI
 
-app = FastAPI(title="Verification Service")
+from app.api.errors import register_error_handlers
+from app.api.routes import router as api_router
+from app.core.logging import configure_logging
+from app.services import warm_up_models
 
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     warm_up_models()
+    yield
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def create_app() -> FastAPI:
+    configure_logging()
+    app = FastAPI(title="Verification Service", lifespan=lifespan)
+    register_error_handlers(app)
+    app.include_router(api_router)
+    return app
 
 
-@app.post("/verify", response_model=VerificationResponse)
-async def verify(
-    userId: int = Form(...),
-    idCardImage: UploadFile = File(...),
-    selfieImage: UploadFile = File(...),
-) -> VerificationResponse:
-    try:
-        id_card_bytes = await idCardImage.read()
-        selfie_bytes = await selfieImage.read()
-        result = verify_identity(id_card_bytes=id_card_bytes, selfie_bytes=selfie_bytes)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Verification failed: {exc}") from exc
-
-    return VerificationResponse(
-        userId=userId,
-        status=result.status,
-        score=result.score,
-        reason=result.reason,
-        ocrData=result.ocr_data,
-    )
+app = create_app()

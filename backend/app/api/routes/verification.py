@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_db
+from app.api.deps import get_db
 from app.schemas.verification import VerificationStatusResponse, VerificationSubmitResponse
 from app.services import verification_service
 

@@ -1,15 +1,15 @@
-"""Calls ACO service and maps response (ported from RouteOptimizationService.java)."""
+"""Build the ACO request, call the integration client, and shape the response."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.integrations import aco_client
+from app.integrations.aco_client import AcoServiceError
 from app.models.tourist_attraction import TouristAttraction
 
 log = logging.getLogger(__name__)
@@ -32,17 +32,12 @@ def optimize_route(
     attractions = _find_attractions_ordered(db, attraction_ids)
     body = _build_aco_body(attractions, start_lat, start_lon, profile)
 
-    url = f"{settings.aco_service_url.rstrip('/')}/optimize"
     log.info("Calling ACO optimize with routingProfile=%s", profile)
     try:
-        with httpx.Client(timeout=120.0) as client:
-            r = client.post(url, json=body)
-            r.raise_for_status()
-            raw = r.json()
-    except httpx.ConnectError as e:
-        raise RuntimeError("ACO service is not available. Is the Python service running?") from e
-    except httpx.HTTPStatusError as e:
-        raise RuntimeError(f"ACO service error: {e}") from e
+        raw = aco_client.optimize(body)
+    except AcoServiceError as exc:
+        # Re-raise as RuntimeError so the API layer can map to a sensible HTTP code.
+        raise RuntimeError(str(exc)) from exc
 
     response = _parse_aco_response(raw)
     _enrich_step_names(response, attractions)
@@ -53,14 +48,23 @@ def optimize_route(
 def _normalize_routing_profile(routing_profile: str | None) -> str:
     if not routing_profile or not str(routing_profile).strip():
         return "driving"
-    p = str(routing_profile).strip().lower()
-    if p not in ("driving", "foot"):
+    profile = str(routing_profile).strip().lower()
+    if profile not in ("driving", "foot"):
         raise ValueError("routingProfile must be 'driving' or 'foot'")
-    return p
+    return profile
 
 
 def _find_attractions_ordered(db: Session, ids: list[int]) -> list[TouristAttraction]:
-    rows = db.execute(select(TouristAttraction).where(TouristAttraction.id.in_(ids), TouristAttraction.is_active == True)).scalars().all()  # noqa: E712
+    rows = (
+        db.execute(
+            select(TouristAttraction).where(
+                TouristAttraction.id.in_(ids),
+                TouristAttraction.is_active == True,  # noqa: E712
+            )
+        )
+        .scalars()
+        .all()
+    )
     if len(rows) != len(ids):
         found = {a.id for a in rows}
         missing = [i for i in ids if i not in found]
@@ -140,8 +144,8 @@ def _parse_aco_response(body: dict[str, Any]) -> dict[str, Any]:
 def _enrich_step_names(response: dict[str, Any], attractions: list[TouristAttraction]) -> None:
     name_map = {a.id: a.name for a in attractions}
     for step in response["steps"]:
-        aid = int(step["attractionId"])
-        if aid == 0:
+        attraction_id = int(step["attractionId"])
+        if attraction_id == 0:
             step["attractionName"] = "Your Location"
         else:
-            step["attractionName"] = name_map.get(aid, "Unknown")
+            step["attractionName"] = name_map.get(attraction_id, "Unknown")

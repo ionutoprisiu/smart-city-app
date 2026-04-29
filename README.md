@@ -1,141 +1,163 @@
 # Smart City App
 
-Full-stack application focused on **Visit City (smart tourism)**: attractions from the database (plus optional OSM live refresh), selection on the map, and **optimal walking/driving route** via **ACO** + **OSRM**.
+Full-stack thesis project for smart tourism in Cluj-Napoca:
 
-**Stack:** FastAPI (API + DB), FastAPI (ACO + OSRM), FastAPI (verification), Flutter (iOS/Android), PostgreSQL.
+- user auth + profile
+- attraction discovery and map exploration
+- route optimization (ACO + OSRM)
+- ID verification (ID card + selfie)
+- iOS mobile app in React Native
 
----
-
-## Project Structure
+## Repository Layout
 
 ```
 licenta-app/
-├── backend/          # FastAPI (port 8080) — auth + Visit City
-├── frontend/         # Flutter — Visit City + map + auth
-├── aco-service/      # ACO + OSRM (port 8000)
-├── verification-service/ # ID card + selfie verification (port 8090)
-└── docker-compose.yml
+├── backend/               # FastAPI API gateway + business logic (port 8080)
+├── aco-service/           # FastAPI microservice for route optimization (port 8000)
+├── verification-service/  # FastAPI microservice for identity verification (port 8090)
+├── frontend/              # React Native (iOS) client app
+├── osrm-data/             # Prepared OSRM datasets
+└── docker-compose.yml     # Full local stack
 ```
 
----
+## Architecture
 
-## Visit City — How It Works
+### Backend (`backend`)
 
-1. **Attractions** — From the DB; optional live merge from **Overpass** (Cluj-Napoca area).
-2. **Map** — Clustering, custom pins, add/remove attractions to the route.
-3. **Optimize** — Sends selection to `backend` → **ACO service** (OSRM Table + Route, or Haversine fallback).
-4. **Start / Modify** — After optimization, the user can start the route or change selection.
+Modular FastAPI service with layers:
 
----
+- `api/` routes + deps + HTTP errors
+- `services/` business use-cases
+- `integrations/` outbound clients (`aco`, `verification`, `overpass`)
+- `db/` SQLAlchemy setup + schema updates + seed
+- `models/` ORM entities
+- `schemas/` Pydantic DTOs
+- `common/` shared exceptions
 
-## Quick Start
+Primary responsibilities:
+
+- auth (`/api/auth/*`)
+- visit-city listing/filter/live discovery
+- route optimization orchestration (`backend -> aco-service`)
+- verification orchestration (`backend -> verification-service`)
+
+### ACO Service (`aco-service`)
+
+FastAPI microservice that computes optimized route order:
+
+- builds cost matrix via OSRM `/table`
+- runs Ant Colony Optimization (anchored at start point index 0)
+- fetches per-leg geometry via OSRM `/route`
+- falls back to Haversine when OSRM is unavailable
+
+### Verification Service (`verification-service`)
+
+FastAPI microservice for identity checks:
+
+- face comparison between ID portrait and selfie (`insightface`)
+- OCR text extraction preview (`pytesseract`)
+- decision thresholds: approved / manualReview / rejected
+
+### Frontend (`frontend`)
+
+React Native + TypeScript app (iOS-first):
+
+- auth flow (login/register/verification gate)
+- visit-city list + filters + map + route steps
+- profile and verification screens
+- shared API client, storage, theming, validators
+
+## API Overview
+
+### Backend (8080)
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/visit-city/attractions`
+- `GET /api/visit-city/attractions/live`
+- `POST /api/visit-city/optimize`
+- `POST /api/verification/submit`
+- `GET /api/verification/status/{user_id}`
+- `GET /health`
+
+### ACO Service (8000)
+
+- `POST /optimize`
+- `GET /health`
+
+### Verification Service (8090)
+
+- `POST /verify` (multipart: `userId`, `idCardImage`, `selfieImage`)
+- `GET /health`
+
+## Local Run (Docker Recommended)
 
 ### Prerequisites
 
-- Python 3.11+
-- PostgreSQL (`licenta_db`)
-- Flutter SDK
+- Docker Desktop
+- Xcode (for iOS run)
+- Node.js 22+ (for frontend)
 
-### Order (local)
-
-1. PostgreSQL
-2. **ACO** (port 8000)
-3. **Verification Service** (port 8090)
-4. **Backend** (port 8080)
-5. **Flutter**
-
-### 1. Database
+### 1) Configure environment
 
 ```bash
-createdb licenta_db
+cp .env.example .env
 ```
 
-Tables are created at backend startup (`create_all`).
+Root `.env` controls PostgreSQL and OSRM dataset names.
 
-### 2. ACO Service
+### 2) Start full services stack
 
 ```bash
-cd aco-service
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+docker compose --profile with-db up -d postgres osrm-foot osrm-driving aco-service verification-service backend
 ```
 
-Runs on **http://localhost:8000**. Health: `GET /health`. Route: `POST /optimize`.
-
-### 3. Backend
+Optional OSRM prepare profile (if datasets are not already generated):
 
 ```bash
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8080
+docker compose --profile osrm-prepare up osrm-prepare-foot osrm-prepare-driving
 ```
 
-Runs on **http://localhost:8080**. Docs: `http://localhost:8080/docs`.
-
-`backend/.env`:
-
-```env
-DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/licenta_db
-ACO_SERVICE_URL=http://localhost:8000
-VERIFICATION_SERVICE_URL=http://localhost:8090
-CORS_ORIGINS_RAW=*
-```
-
-Local admin seed (optional, enabled by default in current backend config):
-
-```env
-SEED_ADMIN_USER=true
-ADMIN_USER_EMAIL=admin@admin.com
-ADMIN_USER_PASSWORD=admin
-```
-
-### 4. Verification Service
+### 3) Verify health
 
 ```bash
-cd verification-service
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8090
+curl http://localhost:8080/health
+curl http://localhost:8000/health
+curl http://localhost:8090/health
 ```
 
-Runs on **http://localhost:8090**. Health: `GET /health`. Verify: `POST /verify`.
-
-### 5. Frontend
+## Run Frontend (iOS)
 
 ```bash
 cd frontend
-flutter pub get
-flutter run
+npm install
+cd ios && pod install && cd ..
+npm start
+npx react-native run-ios --device "Ionut’s iPhone" --no-packager
 ```
 
-| Platform | Backend URL |
-|----------|-------------|
-| iOS Simulator (physical) | `http://<LOCAL_IP>:8080/api` |
-| Android Emulator | `10.0.2.2:8080` |
-| macOS | `127.0.0.1:8080` |
+For physical iPhone, backend base URL is set in:
 
-### Docker (full stack)
+- `frontend/src/shared/api/config.ts`
 
-1. Copy `.env.example` to `.env` at repo root.
-2. Optional OSRM prep: `docker compose --profile osrm-prepare up osrm-prepare-foot osrm-prepare-driving`
-3. `docker compose up --build`
+Use your Mac LAN IP in the same Wi-Fi network as the phone.
 
-Dacă în Docker Desktop apar containere oprite (resturi vechi): `docker container prune -f`.
+## Quality Gates
 
----
+In `frontend/`:
 
-## API (what the app uses)
+```bash
+npm run lint
+npm run typecheck
+npm test -- --runInBand
+```
 
-| Area | Backend (8080) | ACO (8000) | Verification (8090) |
-|------|----------------|------------|---------------------|
-| Auth | `POST /api/auth/register`, `POST /api/auth/login` | — | — |
-| Visit City | `GET /api/visit-city/attractions`, `.../live`, `POST .../optimize` | `POST /optimize` | — |
-| Verification | `POST /api/verification/submit`, `GET /api/verification/status/{user_id}` | — | `POST /verify` |
+## Notes
 
----
+- Project currently targets iOS for mobile client.
+- Flutter frontend was removed after RN migration.
+- This repository uses a single top-level README by design.
 
 ## License
 
-Private / educational use (thesis project).
+Private / educational use.
