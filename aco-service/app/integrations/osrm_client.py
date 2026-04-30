@@ -14,6 +14,7 @@ import httpx
 from app.common.distance import (
     MISSING_EDGE_KM,
     MISSING_EDGE_SEC,
+    haversine_distance,
     is_same_point,
 )
 from app.core.config import settings
@@ -137,17 +138,31 @@ def _straight_line(a: dict, b: dict) -> list[dict]:
 
 
 def _anchor_segment(segment: list[dict], start: dict, end: dict) -> list[dict]:
-    """Ensure the polyline touches the exact selected points, not only OSRM-snapped ones."""
+    """Snap segment ends to requested POIs only when OSRM is already close.
+
+    Prepending/appending arbitrary coordinates created short diagonal "chords"
+    off the road network (triangle artifacts at junctions).
+    """
     if not segment:
         return _straight_line(start, end)
 
-    anchored = segment
-    first = anchored[0]
-    if not is_same_point(first["latitude"], first["longitude"], start["latitude"], start["longitude"]):
-        anchored = [{"latitude": start["latitude"], "longitude": start["longitude"]}, *anchored]
+    anchored = list(segment)
+    snap_km = 0.12
 
-    last = anchored[-1]
-    if not is_same_point(last["latitude"], last["longitude"], end["latitude"], end["longitude"]):
-        anchored = [*anchored, {"latitude": end["latitude"], "longitude": end["longitude"]}]
+    d0_km = haversine_distance(
+        start["latitude"], start["longitude"], anchored[0]["latitude"], anchored[0]["longitude"]
+    )
+    if d0_km <= snap_km or is_same_point(
+        anchored[0]["latitude"], anchored[0]["longitude"], start["latitude"], start["longitude"]
+    ):
+        anchored[0] = {"latitude": start["latitude"], "longitude": start["longitude"]}
+
+    d1_km = haversine_distance(
+        end["latitude"], end["longitude"], anchored[-1]["latitude"], anchored[-1]["longitude"]
+    )
+    if d1_km <= snap_km or is_same_point(
+        anchored[-1]["latitude"], anchored[-1]["longitude"], end["latitude"], end["longitude"]
+    ):
+        anchored[-1] = {"latitude": end["latitude"], "longitude": end["longitude"]}
 
     return anchored

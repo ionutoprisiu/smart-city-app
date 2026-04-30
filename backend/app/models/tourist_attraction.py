@@ -21,5 +21,13 @@ class TouristAttraction(Base):
         "estimated_visit_time", Integer, default=30, nullable=False
     )
     is_active: Mapped[bool] = mapped_column("is_active", Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime | None] = mapped_column("created_at", DateTime, nullable=True)
-    updated_at: Mapped[datetime | None] = mapped_column("updated_at", DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        "created_at", DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        "updated_at",
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )

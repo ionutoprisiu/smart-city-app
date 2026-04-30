@@ -48,7 +48,11 @@ export const AttractionCard: React.FC<Props> = ({
 
   useEffect(() => {
     let cancelled = false;
-    AddressService.streetFromCoordinates(attraction.latitude, attraction.longitude).then(
+    AddressService.streetFromCoordinates(
+      attraction.latitude,
+      attraction.longitude,
+      attraction.city,
+    ).then(
       (value) => {
         if (!cancelled) setStreet(value);
       },

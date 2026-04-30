@@ -54,7 +54,7 @@ type VisitCityState = {
   startRoute: () => void;
   stopRoute: () => void;
 
-  fetchUserLocation: () => Promise<void>;
+  fetchUserLocation: (options?: { forceFresh?: boolean }) => Promise<void>;
   startLiveTracking: () => void;
   stopLiveTracking: () => void;
 
@@ -79,7 +79,11 @@ const requestLocationPermission = async (): Promise<boolean> => {
   }
 };
 
-export const useVisitCityStore = create<VisitCityState>((set, get) => ({
+/** GPS sent as first stop whenever we have a fix (no geofence around Cluj). */
+export const useVisitCityStore = create<VisitCityState>((set, get) => {
+  const effectiveRouteStart = (): Position | null => get().userPosition ?? null;
+
+  return {
   attractions: [],
   customPins: [],
   selectedIds: [],
@@ -100,10 +104,11 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
   selectedCount: () => get().selectedIds.length,
   hasLocation: () => get().userPosition != null,
   canOptimize: () => {
-    const { selectedIds, userPosition } = get();
+    const { selectedIds } = get();
     const backendCount = selectedIds.filter((id) => id > 0).length;
+    const start = effectiveRouteStart();
     if (backendCount >= 2) return true;
-    if (backendCount >= 1 && userPosition != null) return true;
+    if (backendCount >= 1 && start != null) return true;
     return false;
   },
   allAttractions: () => [...get().attractions, ...get().customPins],
@@ -178,21 +183,31 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
     const backendIds = selectedIds.filter((id) => id > 0);
 
     if (!get().canOptimize()) {
-      set({
-        errorMessage:
-          userPosition == null
-            ? 'Select at least 2 attractions, or enable location for 1'
-            : 'Select at least 1 attraction to optimize a route',
-      });
+      const backendCount = backendIds.length;
+      const pos = userPosition;
+      let errorMessage: string;
+      if (backendCount === 0) {
+        errorMessage = 'Select at least one attraction.';
+      } else if (backendCount === 1) {
+        errorMessage =
+          pos == null
+            ? 'Select at least two attractions, or turn on location to start the route from where you are.'
+            : 'Cannot optimize this route.';
+      } else {
+        errorMessage = 'Cannot optimize this route.';
+      }
+      set({ errorMessage });
       return;
     }
 
     set({ isOptimizing: true, errorMessage: null });
     try {
+      await get().fetchUserLocation({ forceFresh: true });
+      const start = effectiveRouteStart();
       const result = await VisitCityApi.optimizeRoute({
         attractionIds: backendIds,
-        startLat: userPosition?.latitude ?? null,
-        startLon: userPosition?.longitude ?? null,
+        startLat: start?.latitude ?? null,
+        startLon: start?.longitude ?? null,
         routingProfile,
       });
       set({
@@ -224,7 +239,8 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
     set({ routeStarted: false });
   },
 
-  fetchUserLocation: async () => {
+  fetchUserLocation: async (options) => {
+    const forceFresh = options?.forceFresh === true;
     const granted = await requestLocationPermission();
     if (!granted) {
       Logger.warning('Location permission denied');
@@ -246,7 +262,11 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
           Logger.error('Failed to get location', err);
           resolve();
         },
-        { enableHighAccuracy: true, timeout: 15_000, maximumAge: 5_000 },
+        {
+          enableHighAccuracy: true,
+          timeout: 22_000,
+          maximumAge: forceFresh ? 0 : 10_000,
+        },
       );
     });
   },
@@ -311,4 +331,5 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
       selectedIds: get().selectedIds.filter((sid) => sid !== id),
     });
   },
-}));
+};
+});

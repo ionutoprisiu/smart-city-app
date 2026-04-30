@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -28,6 +28,7 @@ import { useVisitCityStore } from '../store/visitCityStore';
 import {
   Attraction,
   RouteResult,
+  RoutingProfile,
   categoryIcon,
   categoryLabel,
 } from '../types';
@@ -35,6 +36,7 @@ import {
 const CLUJ_CENTER = { latitude: 46.7712, longitude: 23.5898 };
 const TILE_URL =
   'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
+const INITIAL_REGION = { ...CLUJ_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 };
 
 const SEGMENT_COLORS = [
   '#4285F4',
@@ -68,13 +70,14 @@ const buildRoutePolylines = (
   hidePassedSegments: boolean,
   userPosition: { latitude: number; longitude: number } | null,
 ) => {
-  if (result == null) return [] as { id: string; coords: { latitude: number; longitude: number }[]; color: string }[];
+  if (result == null) {
+    return [] as { id: string; coords: { latitude: number; longitude: number }[]; color: string }[];
+  }
+
+  const passedSegments =
+    hidePassedSegments && userPosition != null ? passedSegmentCount(result, userPosition) : 0;
 
   if (result.routeSegments.length > 0) {
-    const passedSegments =
-      hidePassedSegments && userPosition != null
-        ? passedSegmentCount(result, userPosition)
-        : 0;
     return result.routeSegments
       .map((seg, i) => ({
         id: `seg-${i}`,
@@ -98,6 +101,82 @@ const buildRoutePolylines = (
     ];
   }
   return [];
+};
+
+const segmentStrokeWidth = (segmentIndex: number) => Math.max(3, 9 - segmentIndex * 1.15);
+
+/** Bearing from `a` to `b`, degrees clockwise from north (0–360). */
+const bearingDeg = (
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+) => {
+  const φ1 = (a.latitude * Math.PI) / 180;
+  const φ2 = (b.latitude * Math.PI) / 180;
+  const Δλ = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+};
+
+/** Move a WGS84 point by `distanceM` meters along `bearingDeg` (geodesic). */
+const movePointByBearingMeters = (
+  latitude: number,
+  longitude: number,
+  bearingDeg: number,
+  distanceM: number,
+) => {
+  const R = earthRadiusMeters;
+  const brng = (bearingDeg * Math.PI) / 180;
+  const φ1 = (latitude * Math.PI) / 180;
+  const λ1 = (longitude * Math.PI) / 180;
+  const δ = distanceM / R;
+  const φ2 = Math.asin(
+    Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(brng),
+  );
+  const λ2 =
+    λ1 +
+    Math.atan2(
+      Math.sin(brng) * Math.sin(δ) * Math.cos(φ1),
+      Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2),
+    );
+  return { latitude: (φ2 * 180) / Math.PI, longitude: (λ2 * 180) / Math.PI };
+};
+
+/** Lateral offset ~one “lane” to each side so colored legs don’t stack.
+
+    Uses one bearing for the whole leg (start→end). Per-vertex tangents
+    at sharp corners folded the polyline into self-intersecting loops. */
+const SEGMENT_LATERAL_OFFSET_M = 2.4;
+
+const offsetPolylinePerpendicularToTravel = (
+  coords: { latitude: number; longitude: number }[],
+  segmentIndex: number,
+) => {
+  if (coords.length < 2) return coords;
+  const brg = bearingDeg(coords[0], coords[coords.length - 1]);
+  const lateral = segmentIndex % 2 === 0 ? 90 : -90;
+  const perp = brg + lateral;
+  return coords.map((p) =>
+    movePointByBearingMeters(p.latitude, p.longitude, perp, SEGMENT_LATERAL_OFFSET_M),
+  );
+};
+
+const polylineCoordinatesForRender = (
+  line: { id: string; coords: { latitude: number; longitude: number }[] },
+  /** Driving-only: slight lateral split so leg colors don’t paint on top of each other. */
+  useLateralOffset: boolean,
+) => {
+  if (!useLateralOffset || !line.id.startsWith('seg-')) return line.coords;
+  const segmentIndex = Number(line.id.slice(4));
+  if (!Number.isFinite(segmentIndex)) return line.coords;
+  return offsetPolylinePerpendicularToTravel(line.coords, segmentIndex);
+};
+
+const polylineStrokeWidth = (line: { id: string }, profile: RoutingProfile) => {
+  const idx = line.id.startsWith('seg-') ? Number(line.id.slice(4)) : 0;
+  if (!Number.isFinite(idx)) return profile === 'foot' ? 5 : 6;
+  const base = segmentStrokeWidth(idx);
+  return profile === 'foot' ? Math.max(4, Math.min(7, base)) : base;
 };
 
 const passedSegmentCount = (
@@ -148,6 +227,161 @@ const computeRouteRegion = (result: RouteResult): Region | null => {
   };
 };
 
+type DisplayMarker =
+  | {
+      kind: 'single';
+      attraction: Attraction;
+      selected: boolean;
+      order?: number;
+    }
+  | {
+      kind: 'cluster';
+      id: string;
+      latitude: number;
+      longitude: number;
+      count: number;
+      category: Attraction['category'];
+    };
+
+/** Grid step ~square-ish in meters: lon step widens with cos(lat). */
+const clusterCellForRegion = (region: Region, foot: boolean) => {
+  const d = region.latitudeDelta;
+  let cellLat: number;
+  if (d >= 0.14) cellLat = 0.022;
+  else if (d >= 0.1) cellLat = 0.016;
+  else if (d >= 0.07) cellLat = 0.011;
+  else if (d >= 0.05) cellLat = 0.008;
+  else if (d >= 0.035) cellLat = 0.0055;
+  else if (d >= 0.025) cellLat = 0.0038;
+  else if (d >= 0.018) cellLat = 0.0026;
+  else if (d >= 0.012) cellLat = 0.0017;
+  else if (d >= 0.008) cellLat = 0.0011;
+  else if (d >= 0.005) cellLat = 0.0007;
+  else cellLat = 0.00045;
+
+  const cosLat = Math.max(0.35, Math.cos((region.latitude * Math.PI) / 180));
+  const base = { lat: cellLat, lon: cellLat / cosLat };
+  if (!foot) return base;
+  const g = 1.55;
+  return { lat: base.lat * g, lon: base.lon * g };
+};
+
+const VIEWPORT_PAD = 0.5;
+
+const attractionInViewport = (a: Attraction, region: Region) => {
+  const halfLat = (region.latitudeDelta / 2) * (1 + VIEWPORT_PAD);
+  const halfLon = (region.longitudeDelta / 2) * (1 + VIEWPORT_PAD);
+  return (
+    a.latitude >= region.latitude - halfLat &&
+    a.latitude <= region.latitude + halfLat &&
+    a.longitude >= region.longitude - halfLon &&
+    a.longitude <= region.longitude + halfLon
+  );
+};
+
+const MAX_MAP_MARKERS = 140;
+
+const buildClusteredMarkers = (
+  items: Attraction[],
+  orderMap: Record<number, number>,
+  isSelected: (id: number) => boolean,
+  cell: { lat: number; lon: number },
+): DisplayMarker[] => {
+  const clustered = new Map<string, { items: Attraction[]; sumLat: number; sumLon: number }>();
+  const singles: DisplayMarker[] = [];
+
+  for (const a of items) {
+    const order = orderMap[a.id];
+    const selected = isSelected(a.id);
+    if (selected || order != null) {
+      singles.push({
+        kind: 'single',
+        attraction: a,
+        selected,
+        order,
+      });
+      continue;
+    }
+
+    const key = `${Math.floor(a.latitude / cell.lat)}:${Math.floor(a.longitude / cell.lon)}`;
+    const current = clustered.get(key);
+    if (current == null) {
+      clustered.set(key, { items: [a], sumLat: a.latitude, sumLon: a.longitude });
+    } else {
+      current.items.push(a);
+      current.sumLat += a.latitude;
+      current.sumLon += a.longitude;
+    }
+  }
+
+  const grouped: DisplayMarker[] = [];
+  clustered.forEach((group, key) => {
+    if (group.items.length === 1) {
+      const one = group.items[0];
+      grouped.push({
+        kind: 'single',
+        attraction: one,
+        selected: false,
+        order: orderMap[one.id],
+      });
+      return;
+    }
+
+    grouped.push({
+      kind: 'cluster',
+      id: key,
+      latitude: group.sumLat / group.items.length,
+      longitude: group.sumLon / group.items.length,
+      count: group.items.length,
+      category: group.items[0].category,
+    });
+  });
+
+  return [...grouped, ...singles];
+};
+
+const spreadOverlappingMarkers = (markers: DisplayMarker[], region: Region, foot: boolean) => {
+  const circleRadiusMeters = foot
+    ? Math.max(18, Math.min(42, region.latitudeDelta * 1250))
+    : Math.max(10, Math.min(24, region.latitudeDelta * 900));
+  const degLatPerMeter = 1 / 111320;
+  const cosLat = Math.max(0.25, Math.cos((region.latitude * Math.PI) / 180));
+  const degLonPerMeter = 1 / (111320 * cosLat);
+
+  const buckets = new Map<
+    string,
+    Extract<DisplayMarker, { kind: 'single' }>[]
+  >();
+  const singleMarkers = markers.filter(
+    (marker): marker is Extract<DisplayMarker, { kind: 'single' }> =>
+      marker.kind === 'single',
+  );
+
+  for (const marker of singleMarkers) {
+    const key = `${Math.round(marker.attraction.latitude * 10000)}:${Math.round(marker.attraction.longitude * 10000)}`;
+    const group = buckets.get(key);
+    if (group == null) buckets.set(key, [marker]);
+    else group.push(marker);
+  }
+
+  const shifted = new Map<number, { latitude: number; longitude: number }>();
+  buckets.forEach((group) => {
+    if (group.length <= 1) return;
+    const step = (2 * Math.PI) / group.length;
+    group.forEach((marker, index) => {
+      const angle = index * step;
+      const dLat = Math.sin(angle) * circleRadiusMeters * degLatPerMeter;
+      const dLon = Math.cos(angle) * circleRadiusMeters * degLonPerMeter;
+      shifted.set(marker.attraction.id, {
+        latitude: marker.attraction.latitude + dLat,
+        longitude: marker.attraction.longitude + dLon,
+      });
+    });
+  });
+
+  return shifted;
+};
+
 export const MapScreen: React.FC = () => {
   const theme = useTheme();
   const {
@@ -177,6 +411,7 @@ export const MapScreen: React.FC = () => {
   const didFitRoute = useRef(false);
   const [details, setDetails] = useState<Attraction | null>(null);
   const [pinOptions, setPinOptions] = useState<Attraction | null>(null);
+  const [mapRegion, setMapRegion] = useState<Region>(INITIAL_REGION);
   const themedStyles = {
     markerBorder: { borderColor: '#FFFFFF' },
     markerSelectedBorderWidth: { borderWidth: 3 },
@@ -266,11 +501,16 @@ export const MapScreen: React.FC = () => {
     // intentionally empty — taps on markers handle their own logic.
   };
 
+  const mapRoutingProfile: RoutingProfile = routeResult?.routingProfile ?? routingProfile;
+  const footOnMap = mapRoutingProfile === 'foot';
+
   const polylines = buildRoutePolylines(
     routeResult,
     routeStarted && userPosition != null,
     userPosition,
   );
+
+  const usePolylineLateralOffset = mapRoutingProfile === 'driving';
 
   const orderMap: Record<number, number> = {};
   if (routeResult != null) {
@@ -284,12 +524,48 @@ export const MapScreen: React.FC = () => {
       ? attractions.filter((a) => orderMap[a.id] != null)
       : attractions;
 
+  const viewportAttractions = useMemo(
+    () => visibleAttractions.filter((a) => attractionInViewport(a, mapRegion)),
+    [visibleAttractions, mapRegion],
+  );
+
+  const displayMarkers = useMemo<DisplayMarker[]>(() => {
+    let cell = clusterCellForRegion(mapRegion, footOnMap);
+    const cap = footOnMap ? 95 : MAX_MAP_MARKERS;
+    let markers = buildClusteredMarkers(
+      viewportAttractions,
+      orderMap,
+      isSelected,
+      cell,
+    );
+
+    let guard = 0;
+    while (markers.length > cap && guard < 8) {
+      cell = { lat: cell.lat * 1.35, lon: cell.lon * 1.35 };
+      markers = buildClusteredMarkers(
+        viewportAttractions,
+        orderMap,
+        isSelected,
+        cell,
+      );
+      guard += 1;
+    }
+
+    return markers;
+  }, [viewportAttractions, mapRegion, orderMap, isSelected, footOnMap]);
+
+  const shiftedMarkerCoords = useMemo(
+    () => spreadOverlappingMarkers(displayMarkers, mapRegion, footOnMap),
+    [displayMarkers, mapRegion, footOnMap],
+  );
+
   return (
     <View style={styles.root}>
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        initialRegion={{ ...CLUJ_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+        initialRegion={INITIAL_REGION}
+        onRegionChangeComplete={setMapRegion}
         onLongPress={onLongPress}
         onPress={onMapPress}
         showsUserLocation={false}
@@ -301,19 +577,53 @@ export const MapScreen: React.FC = () => {
         {polylines.map((line) => (
           <Polyline
             key={line.id}
-            coordinates={line.coords}
+            coordinates={polylineCoordinatesForRender(line, usePolylineLateralOffset)}
             strokeColor={line.color}
-            strokeWidth={6}
+            strokeWidth={polylineStrokeWidth(line, mapRoutingProfile)}
           />
         ))}
 
-        {visibleAttractions.map((a) => {
-          const order = orderMap[a.id];
-          const selected = isSelected(a.id);
+        {displayMarkers.map((marker) => {
+          if (marker.kind === 'cluster') {
+            return (
+              <Marker
+                key={`cluster-${marker.id}`}
+                coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
+                onPress={() => {
+                  const zoom =
+                    marker.count > 80
+                      ? 0.35
+                      : marker.count > 40
+                        ? 0.5
+                        : 0.6;
+                  mapRef.current?.animateToRegion(
+                    {
+                      latitude: marker.latitude,
+                      longitude: marker.longitude,
+                      latitudeDelta: Math.max(0.008, mapRegion.latitudeDelta * zoom),
+                      longitudeDelta: Math.max(0.008, mapRegion.longitudeDelta * zoom),
+                    },
+                    350,
+                  );
+                }}
+                tracksViewChanges={false}
+              >
+                <View style={[styles.clusterMarker, themedStyles.markerBorder]}>
+                  <Text style={styles.clusterCount}>{marker.count}</Text>
+                  <Text style={styles.clusterEmoji}>{categoryIcon(marker.category)}</Text>
+                </View>
+              </Marker>
+            );
+          }
+
+          const { attraction: a, order, selected } = marker;
+          const shifted = shiftedMarkerCoords.get(a.id);
           return (
             <Marker
               key={a.id}
-              coordinate={{ latitude: a.latitude, longitude: a.longitude }}
+              coordinate={
+                shifted ?? { latitude: a.latitude, longitude: a.longitude }
+              }
               onPress={() => setDetails(a)}
               tracksViewChanges={false}
             >
@@ -335,9 +645,7 @@ export const MapScreen: React.FC = () => {
                 ]}
               >
                 {order != null ? (
-                  <Text
-                    style={[styles.markerOrderText, themedStyles.markerOrderText]}
-                  >
+                  <Text style={[styles.markerOrderText, themedStyles.markerOrderText]}>
                     {order}
                   </Text>
                 ) : selected ? (
@@ -410,12 +718,6 @@ export const MapScreen: React.FC = () => {
           />
         </View>
 
-        {routeResult != null && !routeStarted ? (
-          <View style={styles.topLeft} pointerEvents="box-none">
-            <RouteInfoCard result={routeResult} />
-          </View>
-        ) : null}
-
         <View style={styles.bottomBar} pointerEvents="box-none">
           {!routeStarted && routeResult == null && selectedCount() > 0 ? (
             <View style={themedStyles.selectionDockWrap}>
@@ -432,8 +734,11 @@ export const MapScreen: React.FC = () => {
           ) : null}
 
           {routeResult != null && !routeStarted ? (
-            <View style={themedStyles.routeStartWrap}>
-              <RouteStartBar onStart={startRoute} onModify={stopRoute} />
+            <View style={styles.routePreviewDock}>
+              <RouteInfoCard result={routeResult} layout="dock" />
+              <View style={themedStyles.routeStartWrap}>
+                <RouteStartBar onStart={startRoute} onModify={stopRoute} />
+              </View>
             </View>
           ) : null}
 
@@ -587,16 +892,15 @@ const styles = StyleSheet.create({
     top: 12,
     right: 12,
   },
-  topLeft: {
-    position: 'absolute',
-    top: 12,
-    left: 16,
-  },
   bottomBar: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: 12,
+  },
+  routePreviewDock: {
+    alignSelf: 'stretch',
+    width: '100%',
   },
   markerBase: {
     width: 44,
@@ -608,6 +912,26 @@ const styles = StyleSheet.create({
   markerOrderText: {
     fontWeight: '700',
     fontSize: 14,
+  },
+  clusterMarker: {
+    minWidth: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 3,
+    backgroundColor: '#2A2D36F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  clusterCount: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+    lineHeight: 15,
+  },
+  clusterEmoji: {
+    fontSize: 14,
+    lineHeight: 16,
   },
   customPin: {
     width: 44,

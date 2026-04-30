@@ -66,6 +66,7 @@ export const AttractionDetailsSheet: React.FC<Props> = ({
       AddressService.streetFromCoordinates(
         attraction.latitude,
         attraction.longitude,
+        attraction.city,
       ).then((value) => {
         if (!cancelled) setStreet(value);
       });

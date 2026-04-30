@@ -14,6 +14,7 @@ from app.common.distance import (
     MISSING_EDGE_SEC,
     calculate_distance_matrix,
     calculate_route_distance,
+    is_same_point,
 )
 from app.core.config import settings
 from app.integrations import osrm_client
@@ -50,7 +51,7 @@ async def optimize(request: OptimizeRequest) -> OptimizeResponse:
     if used_osrm:
         route_segments, leg_durations_sec = await osrm_client.fetch_route_segments(ordered, profile)
         for segment in route_segments:
-            route_geometry.extend(segment)
+            _append_segment_merged(route_geometry, segment)
 
     response = _build_response(
         points,
@@ -119,7 +120,7 @@ async def _single_destination(
     if used_osrm:
         route_segments, leg_durations_sec = await osrm_client.fetch_route_segments(points, profile)
         for segment in route_segments:
-            route_geometry.extend(segment)
+            _append_segment_merged(route_geometry, segment)
 
     travel_min = _travel_time_minutes([0, 1], distance, duration_matrix, profile, leg_durations_sec)
 
@@ -153,6 +154,18 @@ async def _single_destination(
         usedOsrm=used_osrm,
         routingProfile=profile,
     )
+
+
+def _append_segment_merged(route_geometry: list[dict], segment: list[dict]) -> None:
+    """Join consecutive OSRM legs without duplicating the shared endpoint."""
+    for j, p in enumerate(segment):
+        if j == 0 and route_geometry:
+            prev = route_geometry[-1]
+            if is_same_point(
+                prev["latitude"], prev["longitude"], p["latitude"], p["longitude"]
+            ):
+                continue
+        route_geometry.append(p)
 
 
 def _build_response(

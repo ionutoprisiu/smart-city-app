@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from app.integrations import overpass_client
@@ -107,6 +108,8 @@ def _parse_element(element: Mapping[str, Any]) -> TouristAttraction | None:
         category=category.value,
         estimated_visit_time=_estimate_visit_time(category),
         is_active=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
 
 

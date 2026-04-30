@@ -6,6 +6,8 @@ import { RouteResult } from '../types';
 
 type Props = {
   result: RouteResult;
+  /** `dock`: full-width strip above the bottom bar so the map stays clear. */
+  layout?: 'floating' | 'dock';
 };
 
 const fmt = (minutes: number) => {
@@ -14,12 +16,14 @@ const fmt = (minutes: number) => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
-export const RouteInfoCard: React.FC<Props> = ({ result }) => {
+export const RouteInfoCard: React.FC<Props> = ({ result, layout = 'floating' }) => {
   const theme = useTheme();
   const travelStr = fmt(result.travelTimeMinutes);
   const totalStr = fmt(result.totalTime);
+  const docked = layout === 'dock';
   const themedStyles = {
-    cardBg: { backgroundColor: theme.colors.surfaceContainerHighest + 'F2' },
+    // ~70% opacity so underlying map labels remain readable when zoomed in.
+    cardBg: { backgroundColor: theme.colors.surfaceContainerHighest + 'B3' },
     title: { color: theme.colors.onSurfaceVariant, letterSpacing: 0.2 },
     kmValue: { color: theme.colors.onSurface, letterSpacing: -0.5 },
     kmUnit: { color: theme.colors.onSurfaceVariant, marginLeft: 6, marginBottom: 2 },
@@ -28,8 +32,10 @@ export const RouteInfoCard: React.FC<Props> = ({ result }) => {
 
   return (
     <View
+      pointerEvents="none"
       style={[
         styles.card,
+        docked ? styles.cardDock : null,
         themedStyles.cardBg,
       ]}
     >
@@ -117,19 +123,25 @@ const Pill: React.FC<PillProps> = ({ icon, label, emphasized = false }) => {
 
 const styles = StyleSheet.create({
   card: {
-    maxWidth: 300,
-    padding: 16,
-    borderRadius: 20,
+    maxWidth: 268,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 16,
+  },
+  cardDock: {
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+    marginBottom: 8,
   },
   kmRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: 10,
+    marginTop: 6,
   },
   pillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 14,
+    marginTop: 10,
   },
   pill: {
     flexDirection: 'row',
@@ -144,6 +156,6 @@ const styles = StyleSheet.create({
   osrmRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
 });

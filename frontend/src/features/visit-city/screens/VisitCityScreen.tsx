@@ -16,6 +16,9 @@ import { useTheme } from '../../../theme';
 import { AttractionCard } from '../components/AttractionCard';
 import { AttractionDetailsSheet } from '../components/AttractionDetailsSheet';
 import { EmptyState } from '../components/EmptyState';
+import { RouteInfoCard } from '../components/RouteInfoCard';
+import { RouteStartBar } from '../components/RouteStartBar';
+import { SelectionDock } from '../components/SelectionDock';
 import { useVisitCityStore } from '../store/visitCityStore';
 import {
   Attraction,
@@ -80,6 +83,17 @@ export const VisitCityScreen: React.FC = () => {
     filterByCategory,
     search,
     clearFilters,
+    routeResult,
+    routeStarted,
+    isOptimizing,
+    routingProfile,
+    canOptimize,
+    setRoutingProfile,
+    optimizeRoute,
+    clearSelection,
+    startRoute,
+    stopRoute,
+    fetchUserLocation,
   } = useVisitCityStore();
 
   const [showMap, setShowMap] = useState(false);
@@ -107,13 +121,21 @@ export const VisitCityScreen: React.FC = () => {
     showMoreText: { color: theme.colors.primary, marginLeft: 8 },
     appBarTitle: { color: theme.colors.onSurface },
     appBarLeftSpacer: { width: 48 },
-    listContent: { paddingBottom: theme.spacing.xLarge },
+    listContent: { paddingBottom: 220 },
+    routeDock: {
+      position: 'absolute' as const,
+      left: 16,
+      right: 16,
+      bottom: 12,
+      gap: 10,
+    },
   };
 
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadAttractions();
+    void fetchUserLocation();
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
@@ -153,6 +175,13 @@ export const VisitCityScreen: React.FC = () => {
     clearFilters();
     setQuickFilter('all');
     setVisibleCount(PAGE_SIZE);
+  };
+
+  const onOptimizeFromList = async () => {
+    await optimizeRoute();
+    if (useVisitCityStore.getState().routeResult != null) {
+      setShowMap(true);
+    }
   };
 
   const renderHeader = () => (
@@ -387,16 +416,41 @@ export const VisitCityScreen: React.FC = () => {
       {showMap ? (
         <MapScreen />
       ) : (
-        <FlatList
-          data={visibleAttractions}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          ListHeaderComponent={renderHeader}
-          ListFooterComponent={renderFooter}
-          ListEmptyComponent={renderEmptyOrLoading}
-          contentContainerStyle={themedStyles.listContent}
-          keyboardShouldPersistTaps="handled"
-        />
+        <>
+          <FlatList
+            data={visibleAttractions}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            ListHeaderComponent={renderHeader}
+            ListFooterComponent={renderFooter}
+            ListEmptyComponent={renderEmptyOrLoading}
+            contentContainerStyle={themedStyles.listContent}
+            keyboardShouldPersistTaps="handled"
+          />
+
+          <View pointerEvents="box-none" style={themedStyles.routeDock}>
+            {routeResult != null && !routeStarted ? (
+              <RouteInfoCard result={routeResult} />
+            ) : null}
+
+            {!routeStarted && routeResult == null && selectedCount() > 0 ? (
+              <SelectionDock
+                count={selectedCount()}
+                profile={routingProfile}
+                isOptimizing={isOptimizing}
+                canOptimize={canOptimize()}
+                onProfileChanged={(p) => setRoutingProfile(p)}
+                onOptimize={canOptimize() ? onOptimizeFromList : undefined}
+                onClear={clearSelection}
+              />
+            ) : null}
+
+            {routeResult != null && !routeStarted ? (
+              <RouteStartBar onStart={startRoute} onModify={stopRoute} />
+            ) : null}
+
+          </View>
+        </>
       )}
 
       <AttractionDetailsSheet
