@@ -26,6 +26,19 @@ export type Club = {
   createdAt: string;
   membersCount: number;
   joined: boolean;
+  isClubAdmin: boolean;
+  /** APPROVED / PENDING when the current user has a membership; null otherwise */
+  membershipStatus: string | null;
+};
+
+export type ActivityAnnouncement = {
+  id: number;
+  title: string;
+  body: string;
+  eventId: number | null;
+  clubId: number | null;
+  createdBy: number;
+  createdAt: string;
 };
 
 export const eventFromJson = (json: any): ActivityEvent => ({
@@ -56,4 +69,19 @@ export const clubFromJson = (json: any): Club => ({
   createdAt: String(json?.createdAt ?? ''),
   membersCount: Number(json?.membersCount ?? 0),
   joined: Boolean(json?.joined),
+  isClubAdmin: Boolean(json?.isClubAdmin),
+  membershipStatus:
+    json?.membershipStatus != null && json?.membershipStatus !== ''
+      ? String(json.membershipStatus)
+      : null,
+});
+
+export const announcementFromJson = (json: any): ActivityAnnouncement => ({
+  id: Number(json?.id ?? 0),
+  title: String(json?.title ?? ''),
+  body: String(json?.body ?? ''),
+  eventId: json?.eventId != null ? Number(json.eventId) : null,
+  clubId: json?.clubId != null ? Number(json.clubId) : null,
+  createdBy: Number(json?.createdBy ?? 0),
+  createdAt: String(json?.createdAt ?? ''),
 });

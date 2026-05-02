@@ -13,7 +13,14 @@ from app.db import Base, engine
 from app.db.schema_updates import apply_non_destructive_updates
 from app.db.seed import seed_admin_user_if_enabled, seed_demo_user_if_enabled
 from app.db.session import SessionLocal
-from app.models import ActivityEvent, Club, ClubMembership, TouristAttraction, User  # noqa: F401 — register metadata
+from app.models import (  # noqa: F401 — register metadata
+    ActivityAnnouncement,
+    ActivityEvent,
+    Club,
+    ClubMembership,
+    TouristAttraction,
+    User,
+)
 
 configure_logging()
 

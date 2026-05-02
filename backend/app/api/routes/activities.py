@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.schemas.activities import (
+    AnnouncementCreateRequest,
+    AnnouncementResponse,
     BecomeOrganizerRequest,
     ClubCreateRequest,
     ClubJoinRequest,
@@ -63,6 +65,26 @@ def create_event(req: EventCreateRequest, db: Session = Depends(get_db)) -> Even
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
+@router.get("/events/{event_id}/announcements", response_model=list[AnnouncementResponse])
+def list_event_announcements(event_id: int, db: Session = Depends(get_db)) -> list[AnnouncementResponse]:
+    try:
+        return activities_service.list_event_announcements(db, event_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/events/{event_id}/announcements", response_model=AnnouncementResponse)
+def create_event_announcement(
+    event_id: int, req: AnnouncementCreateRequest, db: Session = Depends(get_db)
+) -> AnnouncementResponse:
+    try:
+        return activities_service.create_event_announcement(db, event_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
 @router.post("/events/{event_id}/cancel", response_model=EventResponse)
 def cancel_event(event_id: int, req: UserActorRequest, db: Session = Depends(get_db)) -> EventResponse:
     try:
@@ -98,6 +120,32 @@ def create_club(req: ClubCreateRequest, db: Session = Depends(get_db)) -> ClubRe
         return activities_service.create_club(db, req)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.get("/clubs/{club_id}/announcements", response_model=list[AnnouncementResponse])
+def list_club_announcements(
+    club_id: int,
+    userId: int = Query(...),
+    db: Session = Depends(get_db),
+) -> list[AnnouncementResponse]:
+    try:
+        return activities_service.list_club_announcements(db, club_id, userId)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.post("/clubs/{club_id}/announcements", response_model=AnnouncementResponse)
+def create_club_announcement(
+    club_id: int, req: AnnouncementCreateRequest, db: Session = Depends(get_db)
+) -> AnnouncementResponse:
+    try:
+        return activities_service.create_club_announcement(db, club_id, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 

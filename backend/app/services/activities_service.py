@@ -3,12 +3,15 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.activity_announcement import ActivityAnnouncement
 from app.models.activity_event import ActivityEvent
 from app.models.club import Club
 from app.models.club_membership import ClubMembership
 from app.models.enums import Role, VerificationStatus
 from app.models.user import User
 from app.schemas.activities import (
+    AnnouncementCreateRequest,
+    AnnouncementResponse,
     ClubCreateRequest,
     ClubResponse,
     EventCreateRequest,
@@ -96,7 +99,7 @@ def list_clubs(db: Session, user_id: int | None) -> list[ClubResponse]:
 
     out: list[ClubResponse] = []
     for club, members_count in rows:
-        dto = _club_to_response(club)
+        dto = _club_to_response(db, club, user_id)
         dto.membersCount = int(members_count or 0)
         dto.joined = club.id in joined_club_ids
         out.append(dto)
@@ -143,10 +146,7 @@ def create_club(db: Session, req: ClubCreateRequest) -> ClubResponse:
     )
     db.commit()
     db.refresh(club)
-    dto = _club_to_response(club)
-    dto.membersCount = 1
-    dto.joined = True
-    return dto
+    return _club_with_counts(db, club, user.id)
 
 
 def join_club(db: Session, club_id: int, user_id: int) -> ClubResponse:
@@ -215,6 +215,131 @@ def leave_club(db: Session, club_id: int, user_id: int) -> ClubResponse:
     return _club_with_counts(db, club, user_id)
 
 
+def _user_is_global_admin(db: Session, user_id: int) -> bool:
+    u = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+    return u is not None and u.role == Role.ADMIN.value
+
+
+def _user_is_club_admin(db: Session, club: Club, user_id: int) -> bool:
+    if club.created_by == user_id:
+        return True
+    row = db.execute(
+        select(ClubMembership.id).where(
+            ClubMembership.club_id == club.id,
+            ClubMembership.user_id == user_id,
+            ClubMembership.status == "APPROVED",
+            ClubMembership.role == "CLUB_ADMIN",
+        )
+    ).scalar_one_or_none()
+    return row is not None
+
+
+def _viewer_club_membership_status(db: Session, club_id: int, viewer_id: int) -> str | None:
+    row = db.execute(
+        select(ClubMembership.status).where(
+            ClubMembership.club_id == club_id,
+            ClubMembership.user_id == viewer_id,
+        )
+    ).scalar_one_or_none()
+    return str(row) if row is not None else None
+
+
+def _user_can_read_club_announcements(db: Session, club_id: int, user_id: int) -> bool:
+    if _user_is_global_admin(db, user_id):
+        return True
+    row = db.execute(
+        select(ClubMembership.id).where(
+            ClubMembership.club_id == club_id,
+            ClubMembership.user_id == user_id,
+            ClubMembership.status == "APPROVED",
+        )
+    ).scalar_one_or_none()
+    return row is not None
+
+
+def list_event_announcements(db: Session, event_id: int) -> list[AnnouncementResponse]:
+    event = db.execute(
+        select(ActivityEvent).where(ActivityEvent.id == event_id, ActivityEvent.status != "DELETED")
+    ).scalar_one_or_none()
+    if event is None:
+        raise ValueError("Event not found")
+    rows = db.execute(
+        select(ActivityAnnouncement)
+        .where(ActivityAnnouncement.event_id == event_id)
+        .order_by(ActivityAnnouncement.created_at.desc())
+    ).scalars().all()
+    return [_announcement_to_response(r) for r in rows]
+
+
+def create_event_announcement(db: Session, event_id: int, req: AnnouncementCreateRequest) -> AnnouncementResponse:
+    user = _ensure_user_exists(db, req.userId)
+    event = db.execute(
+        select(ActivityEvent).where(ActivityEvent.id == event_id, ActivityEvent.status != "DELETED")
+    ).scalar_one_or_none()
+    if event is None:
+        raise ValueError("Event not found")
+    if event.created_by != user.id and user.role != Role.ADMIN.value:
+        raise PermissionError("Only the event organizer can post announcements")
+    ann = ActivityAnnouncement(
+        title=req.title.strip(),
+        body=req.body.strip(),
+        event_id=event.id,
+        club_id=None,
+        created_by=user.id,
+    )
+    db.add(ann)
+    db.commit()
+    db.refresh(ann)
+    return _announcement_to_response(ann)
+
+
+def list_club_announcements(db: Session, club_id: int, user_id: int) -> list[AnnouncementResponse]:
+    _ensure_user_exists(db, user_id)
+    club = db.execute(select(Club).where(Club.id == club_id, Club.status != "DELETED")).scalar_one_or_none()
+    if club is None:
+        raise ValueError("Club not found")
+    if not _user_can_read_club_announcements(db, club_id, user_id):
+        raise PermissionError("Only approved club members can view announcements")
+    rows = db.execute(
+        select(ActivityAnnouncement)
+        .where(ActivityAnnouncement.club_id == club_id)
+        .order_by(ActivityAnnouncement.created_at.desc())
+    ).scalars().all()
+    return [_announcement_to_response(r) for r in rows]
+
+
+def create_club_announcement(db: Session, club_id: int, req: AnnouncementCreateRequest) -> AnnouncementResponse:
+    user = _ensure_user_exists(db, req.userId)
+    club = db.execute(select(Club).where(Club.id == club_id, Club.status == "ACTIVE")).scalar_one_or_none()
+    if club is None:
+        raise ValueError("Club not found")
+    if not (_user_is_club_admin(db, club, user.id) or user.role == Role.ADMIN.value):
+        raise PermissionError("Only club admins can post announcements")
+    ann = ActivityAnnouncement(
+        title=req.title.strip(),
+        body=req.body.strip(),
+        event_id=None,
+        club_id=club.id,
+        created_by=user.id,
+    )
+    db.add(ann)
+    db.commit()
+    db.refresh(ann)
+    return _announcement_to_response(ann)
+
+
+def _announcement_to_response(item: ActivityAnnouncement) -> AnnouncementResponse:
+    return AnnouncementResponse(
+        id=item.id,
+        title=item.title,
+        body=item.body,
+        eventId=item.event_id,
+        clubId=item.club_id,
+        createdBy=item.created_by,
+        createdAt=item.created_at,
+    )
+
+
 def _ensure_organizer(db: Session, user_id: int) -> User:
     user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if user is None:
@@ -254,7 +379,12 @@ def _event_to_response(item: ActivityEvent) -> EventResponse:
     )
 
 
-def _club_to_response(item: Club) -> ClubResponse:
+def _club_to_response(db: Session, item: Club, viewer_id: int | None) -> ClubResponse:
+    is_club_admin = False
+    membership_status: str | None = None
+    if viewer_id is not None:
+        is_club_admin = _user_is_club_admin(db, item, viewer_id) or _user_is_global_admin(db, viewer_id)
+        membership_status = _viewer_club_membership_status(db, item.id, viewer_id)
     return ClubResponse(
         id=item.id,
         name=item.name,
@@ -265,6 +395,8 @@ def _club_to_response(item: Club) -> ClubResponse:
         status=item.status,
         createdBy=item.created_by,
         createdAt=item.created_at,
+        isClubAdmin=is_club_admin,
+        membershipStatus=membership_status,
     )
 
 
@@ -282,7 +414,7 @@ def _club_with_counts(db: Session, club: Club, user_id: int) -> ClubResponse:
             ClubMembership.status.in_(("APPROVED", "PENDING")),
         )
     ).scalar_one_or_none() is not None
-    dto = _club_to_response(club)
+    dto = _club_to_response(db, club, user_id)
     dto.membersCount = int(members_count)
     dto.joined = joined
     return dto

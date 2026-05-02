@@ -57,6 +57,8 @@ class ClubResponse(BaseModel):
     createdAt: datetime
     membersCount: int = 0
     joined: bool = False
+    isClubAdmin: bool = False
+    membershipStatus: str | None = None
 
 
 class ClubJoinRequest(BaseModel):
@@ -65,3 +67,19 @@ class ClubJoinRequest(BaseModel):
 
 class UserActorRequest(BaseModel):
     userId: int
+
+
+class AnnouncementCreateRequest(BaseModel):
+    userId: int
+    title: str = Field(min_length=2, max_length=200)
+    body: str = Field(min_length=1, max_length=8000)
+
+
+class AnnouncementResponse(BaseModel):
+    id: int
+    title: str
+    body: str
+    eventId: int | None = None
+    clubId: int | None = None
+    createdBy: int
+    createdAt: datetime

@@ -2,7 +2,14 @@ import { ApiClient } from '../../../shared/api/client';
 import { Logger } from '../../../shared/utils/logger';
 import { authResponseFromJson, AuthResponse } from '../../auth/types';
 import { ACTIVITIES_CITY } from '../constants';
-import { ActivityEvent, Club, clubFromJson, eventFromJson } from '../types';
+import {
+  ActivityAnnouncement,
+  ActivityEvent,
+  announcementFromJson,
+  Club,
+  clubFromJson,
+  eventFromJson,
+} from '../types';
 
 export const ActivitiesApi = {
   async becomeOrganizer(userId: number): Promise<AuthResponse> {
@@ -113,5 +120,33 @@ export const ActivitiesApi = {
   async cancelEvent(eventId: number, userId: number): Promise<ActivityEvent> {
     const data = await ApiClient.post(`/activities/events/${eventId}/cancel`, { userId });
     return eventFromJson(data);
+  },
+
+  async listEventAnnouncements(eventId: number): Promise<ActivityAnnouncement[]> {
+    const data = await ApiClient.getList(`/activities/events/${eventId}/announcements`);
+    return data.map((x) => announcementFromJson(x));
+  },
+
+  async createEventAnnouncement(
+    eventId: number,
+    args: { userId: number; title: string; body: string },
+  ): Promise<ActivityAnnouncement> {
+    const data = await ApiClient.post(`/activities/events/${eventId}/announcements`, args);
+    return announcementFromJson(data);
+  },
+
+  async listClubAnnouncements(clubId: number, userId: number): Promise<ActivityAnnouncement[]> {
+    const data = await ApiClient.getList(
+      `/activities/clubs/${clubId}/announcements?userId=${encodeURIComponent(String(userId))}`,
+    );
+    return data.map((x) => announcementFromJson(x));
+  },
+
+  async createClubAnnouncement(
+    clubId: number,
+    args: { userId: number; title: string; body: string },
+  ): Promise<ActivityAnnouncement> {
+    const data = await ApiClient.post(`/activities/clubs/${clubId}/announcements`, args);
+    return announcementFromJson(data);
   },
 };

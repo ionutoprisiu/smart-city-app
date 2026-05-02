@@ -17,6 +17,7 @@ import { StorageService } from '../../../shared/storage/storageService';
 import { useTheme } from '../../../theme';
 import { useAuthStore } from '../../auth/store/authStore';
 import { ActivitiesApi } from '../api/activitiesApi';
+import { AnnouncementsSection } from '../components/AnnouncementsSection';
 import { ACTIVITIES_CITY } from '../constants';
 import { ActivityEvent, Club } from '../types';
 
@@ -338,6 +339,10 @@ export const ActivitiesHomeScreen: React.FC = () => {
               const st = event.status.toUpperCase();
               const statusIsLive = st === 'PUBLISHED';
               const statusIsCancelled = st === 'CANCELLED';
+              const canPostEventAnnouncement =
+                !!currentUser &&
+                (currentUser.role === 'admin' ||
+                  (event.createdBy === currentUser.id && statusIsLive));
               return (
                 <View key={`event-${event.id}`} style={[styles.card, themedStyles.cardBg]}>
                   <View style={styles.cardHeaderRow}>
@@ -391,6 +396,12 @@ export const ActivitiesHomeScreen: React.FC = () => {
                   <View style={[styles.tag, themedStyles.tagBg]}>
                     <Text style={[theme.typography.labelSmall, themedStyles.tagText]}>{event.category}</Text>
                   </View>
+                  <AnnouncementsSection
+                    kind="event"
+                    resourceId={event.id}
+                    currentUserId={currentUser?.id}
+                    canPost={canPostEventAnnouncement}
+                  />
                   {currentUser && event.createdBy === currentUser.id && event.status === 'PUBLISHED' ? (
                     <Pressable
                       onPress={() => onCancelEvent(event.id)}
@@ -403,7 +414,11 @@ export const ActivitiesHomeScreen: React.FC = () => {
                 </View>
               );
             })
-          : clubs.map((club) => (
+          : clubs.map((club) => {
+              const clubCanViewAnnouncements =
+                currentUser?.role === 'admin' || club.membershipStatus === 'APPROVED';
+              const canPostClubAnnouncement = !!currentUser && club.isClubAdmin;
+              return (
               <View key={`club-${club.id}`} style={[styles.card, themedStyles.cardBg]}>
                 <Text style={[theme.typography.titleSmall, themedStyles.cardTitle]}>{club.name}</Text>
                 <Text style={[theme.typography.bodySmall, themedStyles.cardSub]}>
@@ -424,6 +439,14 @@ export const ActivitiesHomeScreen: React.FC = () => {
                     {club.description}
                   </Text>
                 ) : null}
+                <AnnouncementsSection
+                  kind="club"
+                  resourceId={club.id}
+                  currentUserId={currentUser?.id}
+                  canPost={canPostClubAnnouncement}
+                  clubCanView={clubCanViewAnnouncements}
+                  clubMembershipStatus={club.membershipStatus}
+                />
                 <Pressable
                   onPress={() => (club.joined ? onLeaveClub(club.id) : onJoinClub(club.id))}
                   disabled={isLoading || !currentUser}
@@ -439,7 +462,8 @@ export const ActivitiesHomeScreen: React.FC = () => {
                   </Text>
                 </Pressable>
               </View>
-            ))}
+            );
+            })}
       </ScrollView>
     </SafeAreaView>
   );
