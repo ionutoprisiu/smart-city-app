@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../../theme';
 
 export const SplashScreen: React.FC = () => {
@@ -12,7 +13,7 @@ export const SplashScreen: React.FC = () => {
     loaderSpace: { marginTop: 24 },
   };
   return (
-    <View style={[styles.container, themedStyles.containerBg]}>
+    <SafeAreaView style={[styles.container, themedStyles.containerBg]} edges={['top', 'bottom', 'left', 'right']}>
       <View style={[styles.logo, themedStyles.logoBg]}>
         <Text style={[theme.typography.headlineSmall, themedStyles.logoText]}>
           SC
@@ -26,7 +27,7 @@ export const SplashScreen: React.FC = () => {
         color={theme.colors.primary}
         style={themedStyles.loaderSpace}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 

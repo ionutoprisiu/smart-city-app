@@ -5,8 +5,15 @@ export type AuthStackParamList = {
   Register: undefined;
 };
 
+export type ActivitiesStackParamList = {
+  ActivitiesHome: undefined;
+  CreateEvent: undefined;
+  CreateClub: undefined;
+};
+
 export type MainTabsParamList = {
   VisitCity: undefined;
+  Activities: NavigatorScreenParams<ActivitiesStackParamList>;
   Profile: undefined;
 };
 

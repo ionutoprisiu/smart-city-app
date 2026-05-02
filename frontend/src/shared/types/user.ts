@@ -9,6 +9,7 @@ export type User = {
   email: string;
   firstName: string;
   lastName: string;
+  profilePhotoUri?: string | null;
   role?: Role | null;
   isVerified?: boolean | null;
   verificationStatus: VerificationStatus;
@@ -21,6 +22,7 @@ export const userFromJson = (json: any): User => ({
   email: String(json?.email ?? ''),
   firstName: String(json?.firstName ?? ''),
   lastName: String(json?.lastName ?? ''),
+  profilePhotoUri: typeof json?.profilePhotoUri === 'string' ? json.profilePhotoUri : null,
   role: roleFromString(json?.role),
   isVerified: typeof json?.isVerified === 'boolean' ? json.isVerified : null,
   verificationStatus: verificationStatusFromString(json?.verificationStatus),

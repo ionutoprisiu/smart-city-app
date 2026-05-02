@@ -384,7 +384,7 @@ export const VisitCityScreen: React.FC = () => {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={['top', 'left', 'right']}
       style={[styles.root, { backgroundColor: theme.colors.surface }]}
     >
       <View

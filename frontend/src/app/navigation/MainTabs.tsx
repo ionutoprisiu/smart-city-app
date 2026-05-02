@@ -2,6 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivitiesStack } from './ActivitiesStack';
 import { ProfileScreen } from '../../features/profile/screens/ProfileScreen';
 import { VisitCityScreen } from '../../features/visit-city/screens/VisitCityScreen';
 import { useTheme } from '../../theme';
@@ -28,6 +29,16 @@ const profileTabIcon = ({
   size: number;
   focused: boolean;
 }) => <Icon name={focused ? 'person' : 'person-outline'} size={size ?? 24} color={color} />;
+
+const activitiesTabIcon = ({
+  color,
+  size,
+  focused,
+}: {
+  color: string;
+  size: number;
+  focused: boolean;
+}) => <Icon name={focused ? 'celebration' : 'event-note'} size={size ?? 24} color={color} />;
 
 export const MainTabs: React.FC = () => {
   const theme = useTheme();
@@ -65,6 +76,15 @@ export const MainTabs: React.FC = () => {
           title: 'Visit City',
           headerShown: false,
           tabBarIcon: visitCityTabIcon,
+        }}
+      />
+      <Tab.Screen
+        name="Activities"
+        component={ActivitiesStack}
+        options={{
+          title: 'Activities',
+          headerShown: false,
+          tabBarIcon: activitiesTabIcon,
         }}
       />
       <Tab.Screen

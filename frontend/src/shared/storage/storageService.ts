@@ -1,10 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Logger } from '../utils/logger';
+import { Role } from '../types/role';
+import { VerificationStatus } from '../types/verification';
 
 const KEYS = {
   userId: 'user_id',
   userEmail: 'user_email',
   userName: 'user_name',
+  userProfilePhotoUri: 'user_profile_photo_uri',
+  userRole: 'user_role',
+  userIsVerified: 'user_is_verified',
+  userVerificationStatus: 'user_verification_status',
   userToken: 'user_token',
 };
 
@@ -21,11 +27,31 @@ const safeSet = async (key: string, value: string) => {
   }
 };
 
+const safeRemove = async (key: string) => {
+  try {
+    await AsyncStorage.removeItem(key);
+    cache[key] = null;
+    return true;
+  } catch (e) {
+    Logger.error(`StorageService remove failed: ${key}`, e);
+    return false;
+  }
+};
+
 export const StorageService = {
   async init() {
     try {
       const all = await AsyncStorage.getMany(Object.values(KEYS));
-      cache = { ...all };
+      if (Array.isArray(all)) {
+        cache = all.reduce<Record<string, string | null>>((acc, entry) => {
+          if (Array.isArray(entry) && entry.length === 2) {
+            acc[String(entry[0])] = entry[1] as string | null;
+          }
+          return acc;
+        }, {});
+      } else {
+        cache = all as Record<string, string | null>;
+      }
       Logger.info('StorageService initialized');
     } catch (e) {
       Logger.error('StorageService init failed', e);
@@ -46,6 +72,41 @@ export const StorageService = {
   saveUserName: (firstName: string, lastName: string) =>
     safeSet(KEYS.userName, `${firstName}|${lastName}`),
   getUserName: (): string | null => cache[KEYS.userName] ?? null,
+
+  saveUserProfilePhotoUri: (uri: string) => safeSet(KEYS.userProfilePhotoUri, uri),
+  getUserProfilePhotoUri: (): string | null => cache[KEYS.userProfilePhotoUri] ?? null,
+  clearUserProfilePhotoUri: () => safeRemove(KEYS.userProfilePhotoUri),
+
+  saveUserRole: (role: Role) => safeSet(KEYS.userRole, role),
+  getUserRole: (): Role | null => {
+    const value = cache[KEYS.userRole];
+    if (value === 'user' || value === 'organizer' || value === 'admin') return value;
+    return null;
+  },
+
+  saveUserIsVerified: (isVerified: boolean) => safeSet(KEYS.userIsVerified, String(isVerified)),
+  getUserIsVerified: (): boolean | null => {
+    const value = cache[KEYS.userIsVerified];
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return null;
+  },
+
+  saveUserVerificationStatus: (status: VerificationStatus) =>
+    safeSet(KEYS.userVerificationStatus, status),
+  getUserVerificationStatus: (): VerificationStatus | null => {
+    const value = cache[KEYS.userVerificationStatus];
+    if (
+      value === 'notSubmitted' ||
+      value === 'pending' ||
+      value === 'approved' ||
+      value === 'rejected' ||
+      value === 'manualReview'
+    ) {
+      return value;
+    }
+    return null;
+  },
 
   saveUserToken: (token: string) => safeSet(KEYS.userToken, token),
   getUserToken: (): string | null => cache[KEYS.userToken] ?? null,

@@ -1,26 +1,106 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useTheme } from '../../../theme';
+import { AppRootStackParamList } from '../../../app/navigation/types';
+import { StorageService } from '../../../shared/storage/storageService';
 import { fullName } from '../../../shared/types/user';
 import { roleDisplay } from '../../../shared/types/role';
 import { verificationStatusLabel } from '../../../shared/types/verification';
-import { AppRootStackParamList } from '../../../app/navigation/types';
+import { useTheme } from '../../../theme';
 import { useAuthStore } from '../../auth/store/authStore';
 
 type Nav = NativeStackNavigationProp<AppRootStackParamList>;
+
+const verificationTone = (
+  status: string,
+  colors: ReturnType<typeof useTheme>['colors'],
+) => {
+  if (status === 'approved') {
+    return {
+      icon: 'check-circle',
+      color: colors.primary,
+      bg: colors.primaryContainer + '66',
+    };
+  }
+  if (status === 'rejected') {
+    return {
+      icon: 'cancel',
+      color: colors.error,
+      bg: colors.errorContainer + '66',
+    };
+  }
+  return {
+    icon: 'pending-actions',
+    color: colors.tertiary,
+    bg: colors.surfaceContainerHigh,
+  };
+};
 
 export const ProfileScreen: React.FC = () => {
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
   const { currentUser, logout } = useAuthStore();
+  const setAuthState = useAuthStore.setState;
 
   if (!currentUser) return null;
 
   const initials =
     `${currentUser.firstName[0] ?? ''}${currentUser.lastName[0] ?? ''}`.toUpperCase();
+
+  const updateProfilePhoto = async (uri: string | null) => {
+    if (uri) {
+      await StorageService.saveUserProfilePhotoUri(uri);
+    } else {
+      await StorageService.clearUserProfilePhotoUri();
+    }
+    setAuthState({
+      currentUser: {
+        ...currentUser,
+        profilePhotoUri: uri,
+      },
+    });
+  };
+
+  const handlePickerResponse = async (res: ImagePickerResponse) => {
+    if (res.didCancel) return;
+    const uri = res.assets?.[0]?.uri;
+    if (!uri) {
+      Alert.alert('No image selected', 'Please choose another image.');
+      return;
+    }
+    await updateProfilePhoto(uri);
+  };
+
+  const chooseFromGallery = async () => {
+    const res = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: 1,
+    });
+    await handlePickerResponse(res);
+  };
+
+  const takePhoto = async () => {
+    const res = await launchCamera({
+      mediaType: 'photo',
+      cameraType: 'front',
+      saveToPhotos: false,
+    });
+    await handlePickerResponse(res);
+  };
+
+  const openPhotoActions = () => {
+    Alert.alert('Profile photo', 'Choose an action', [
+      { text: 'Take photo', onPress: () => void takePhoto() },
+      { text: 'Choose from gallery', onPress: () => void chooseFromGallery() },
+      ...(currentUser.profilePhotoUri
+        ? [{ text: 'Remove photo', style: 'destructive' as const, onPress: () => void updateProfilePhoto(null) }]
+        : []),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -39,138 +119,106 @@ export const ProfileScreen: React.FC = () => {
     );
   };
 
-  const themedStyles = {
-    rootBg: { backgroundColor: theme.colors.surface },
-    contentPad: {
-      paddingHorizontal: theme.spacing.screen,
-      paddingTop: theme.spacing.medium,
-      paddingBottom: theme.spacing.large,
-    },
-    headerCardBg: {
-      backgroundColor: theme.colors.surfaceContainerHighest + '8C',
-      borderColor: theme.colors.outlineVariant + '59',
-      borderRadius: theme.radius.round,
-    },
-    avatarRingBorder: { borderColor: theme.colors.primary + '59' },
-    avatarBg: { backgroundColor: theme.colors.primaryContainer },
-    avatarText: { color: theme.colors.onPrimaryContainer },
-    profileName: { color: theme.colors.onSurface, marginTop: theme.spacing.medium },
-    profileEmail: { color: theme.colors.onSurfaceVariant, marginTop: 6 },
-    roleChipBorder: { borderColor: theme.colors.outlineVariant, marginTop: 12 },
-    roleText: { color: theme.colors.onSurface, marginLeft: 6 },
-    spacerMedium: { height: theme.spacing.medium },
-    spacerXLarge: { height: theme.spacing.xLarge },
-    signOutText: { color: theme.colors.error, marginLeft: 8 },
-  };
+  const vTone = verificationTone(currentUser.verificationStatus, theme.colors);
 
   return (
     <ScrollView
-      style={[styles.root, themedStyles.rootBg]}
-      contentContainerStyle={themedStyles.contentPad}
+      style={[styles.root, { backgroundColor: theme.colors.surface }]}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingHorizontal: theme.spacing.screen,
+          paddingTop: theme.spacing.medium,
+          paddingBottom: theme.spacing.large,
+        },
+      ]}
     >
       <View
         style={[
           styles.headerCard,
-          themedStyles.headerCardBg,
+          {
+            backgroundColor: theme.colors.surfaceContainerHighest + '8C',
+            borderColor: theme.colors.outlineVariant + '59',
+            borderRadius: theme.radius.round,
+          },
         ]}
       >
-        <View
-          style={[
-            styles.avatarRing,
-            themedStyles.avatarRingBorder,
-          ]}
+        <Pressable
+          onPress={openPhotoActions}
+          style={[styles.avatarRing, { borderColor: theme.colors.primary + '59' }]}
         >
-          <View
-            style={[
-              styles.avatar,
-              themedStyles.avatarBg,
-            ]}
-          >
-            <Text
-              style={[
-                theme.typography.headlineSmall,
-                themedStyles.avatarText,
-              ]}
-            >
-              {initials}
-            </Text>
+          {currentUser.profilePhotoUri ? (
+            <Image source={{ uri: currentUser.profilePhotoUri }} style={styles.avatarImage} />
+          ) : (
+            <View style={[styles.avatarFallback, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Text style={[theme.typography.headlineSmall, { color: theme.colors.onPrimaryContainer }]}>
+                {initials}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.avatarEditBadge, { backgroundColor: theme.colors.primary }]}>
+            <Icon name="photo-camera" size={14} color={theme.colors.onPrimary} />
           </View>
-        </View>
-        <Text
-          style={[
-            theme.typography.titleLarge,
-            themedStyles.profileName,
-          ]}
-        >
+        </Pressable>
+
+        <Text style={[theme.typography.titleLarge, { color: theme.colors.onSurface, marginTop: theme.spacing.medium }]}>
           {fullName(currentUser)}
         </Text>
-        <Text
-          style={[
-            theme.typography.bodyMedium,
-            themedStyles.profileEmail,
-          ]}
-        >
+        <Text style={[theme.typography.bodyMedium, { color: theme.colors.onSurfaceVariant, marginTop: 6 }]}>
           {currentUser.email}
         </Text>
-        <View
-          style={[
-            styles.roleChip,
-            themedStyles.roleChipBorder,
-          ]}
-        >
-          <Icon
-            name={currentUser.role === 'admin' ? 'admin-panel-settings' : 'person'}
-            size={18}
-            color={theme.colors.primary}
-          />
-          <Text
-            style={[
-              theme.typography.labelLarge,
-              themedStyles.roleText,
-            ]}
-          >
-            {roleDisplay(currentUser.role)}
-          </Text>
+
+        <View style={styles.metaRow}>
+          <View style={[styles.metaChip, { borderColor: theme.colors.outlineVariant }]}>
+            <Icon
+              name={currentUser.role === 'admin' ? 'admin-panel-settings' : 'person'}
+              size={16}
+              color={theme.colors.primary}
+            />
+            <Text style={[theme.typography.labelMedium, { color: theme.colors.onSurface, marginLeft: 6 }]}>
+              {roleDisplay(currentUser.role)}
+            </Text>
+          </View>
+          <View style={[styles.metaChip, { backgroundColor: vTone.bg, borderColor: 'transparent' }]}>
+            <Icon name={vTone.icon} size={16} color={vTone.color} />
+            <Text style={[theme.typography.labelMedium, { color: vTone.color, marginLeft: 6 }]}>
+              {verificationStatusLabel(currentUser.verificationStatus)}
+            </Text>
+          </View>
         </View>
       </View>
 
       <Section title="Account">
         <ProfileTile
-          icon="person"
-          title="Personal information"
-          subtitle={`${currentUser.firstName} ${currentUser.lastName}`}
-          onPress={() => {}}
+          icon="photo-camera"
+          title="Profile photo"
+          subtitle={currentUser.profilePhotoUri ? 'Tap to update or remove photo' : 'Add a profile photo'}
+          onPress={openPhotoActions}
         />
         <ProfileTile
           icon="verified-user"
           title="Verification"
           subtitle={verificationStatusLabel(currentUser.verificationStatus)}
-          rightIcon={
-            currentUser.verificationStatus === 'approved'
-              ? 'check-circle'
-              : 'pending-actions'
-          }
-          rightColor={
-            currentUser.verificationStatus === 'approved'
-              ? theme.colors.primary
-              : theme.colors.tertiary
-          }
+          rightIcon={vTone.icon}
+          rightColor={vTone.color}
           onPress={() => navigation.navigate('Verification')}
         />
       </Section>
 
-      <View style={themedStyles.spacerMedium} />
-
       <Section title="About">
+        <ProfileTile
+          icon="location-city"
+          title="City profile"
+          subtitle="Cluj-Napoca"
+          onPress={() => {}}
+        />
         <ProfileTile
           icon="info"
           title="App"
-          subtitle="Smart City · Cluj-Napoca · v1.0"
+          subtitle="Smart City · v1.0"
           onPress={() => {}}
         />
       </Section>
-
-      <View style={themedStyles.spacerXLarge} />
 
       <Pressable
         onPress={handleLogout}
@@ -184,12 +232,7 @@ export const ProfileScreen: React.FC = () => {
         ]}
       >
         <Icon name="logout" size={20} color={theme.colors.error} />
-        <Text
-          style={[
-            theme.typography.labelLarge,
-            themedStyles.signOutText,
-          ]}
-        >
+        <Text style={[theme.typography.labelLarge, { color: theme.colors.error, marginLeft: 8 }]}>
           Sign out
         </Text>
       </Pressable>
@@ -204,26 +247,17 @@ type SectionProps = {
 
 const Section: React.FC<SectionProps> = ({ title, children }) => {
   const theme = useTheme();
-  const themedStyles = {
-    sectionTop: { marginTop: theme.spacing.large },
-    sectionLabel: {
-      color: theme.colors.onSurfaceVariant,
-      letterSpacing: 0.8,
-      marginLeft: 6,
-      marginBottom: 10,
-    },
-    sectionCard: {
-      backgroundColor: theme.colors.surfaceContainerHighest + '8C',
-      borderRadius: theme.radius.round,
-    },
-    divider: { backgroundColor: theme.colors.outline + '1F' },
-  };
   return (
-    <View style={themedStyles.sectionTop}>
+    <View style={{ marginTop: theme.spacing.large }}>
       <Text
         style={[
           theme.typography.labelMedium,
-          themedStyles.sectionLabel,
+          {
+            color: theme.colors.onSurfaceVariant,
+            letterSpacing: 0.8,
+            marginLeft: 6,
+            marginBottom: 10,
+          },
         ]}
       >
         {title.toUpperCase()}
@@ -231,7 +265,10 @@ const Section: React.FC<SectionProps> = ({ title, children }) => {
       <View
         style={[
           styles.sectionCard,
-          themedStyles.sectionCard,
+          {
+            backgroundColor: theme.colors.surfaceContainerHighest + '8C',
+            borderRadius: theme.radius.round,
+          },
         ]}
       >
         {React.Children.toArray(children).map((child, idx, all) => (
@@ -241,7 +278,7 @@ const Section: React.FC<SectionProps> = ({ title, children }) => {
               <View
                 style={[
                   styles.divider,
-                  themedStyles.divider,
+                  { backgroundColor: theme.colors.outline + '1F' },
                 ]}
               />
             ) : null}
@@ -270,43 +307,19 @@ const ProfileTile: React.FC<TileProps> = ({
   onPress,
 }) => {
   const theme = useTheme();
-  const themedStyles = {
-    tileIconBg: { backgroundColor: theme.colors.primaryContainer + '73' },
-    tileContent: { flex: 1, marginLeft: 12 },
-    titleText: { color: theme.colors.onSurface },
-    subtitleText: { color: theme.colors.onSurfaceVariant, marginTop: 2 },
-  };
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.tile,
-        { opacity: pressed ? 0.85 : 1 },
-      ]}
+      style={({ pressed }) => [styles.tile, { opacity: pressed ? 0.85 : 1 }]}
     >
-      <View
-        style={[
-          styles.tileIcon,
-          themedStyles.tileIconBg,
-        ]}
-      >
+      <View style={[styles.tileIcon, { backgroundColor: theme.colors.primaryContainer + '73' }]}>
         <Icon name={icon} size={22} color={theme.colors.primary} />
       </View>
-      <View style={themedStyles.tileContent}>
-        <Text
-          style={[
-            theme.typography.titleSmall,
-            themedStyles.titleText,
-          ]}
-        >
+      <View style={styles.tileContent}>
+        <Text style={[theme.typography.titleSmall, { color: theme.colors.onSurface }]}>
           {title}
         </Text>
-        <Text
-          style={[
-            theme.typography.bodySmall,
-            themedStyles.subtitleText,
-          ]}
-        >
+        <Text style={[theme.typography.bodySmall, { color: theme.colors.onSurfaceVariant, marginTop: 2 }]}>
           {subtitle}
         </Text>
       </View>
@@ -323,24 +336,52 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  content: {
+    paddingBottom: 24,
+  },
   headerCard: {
     alignItems: 'center',
     padding: 24,
     borderWidth: 1,
   },
   avatarRing: {
+    width: 96,
+    height: 96,
     padding: 3,
     borderWidth: 2,
-    borderRadius: 50,
+    borderRadius: 48,
   },
-  avatar: {
-    width: 88,
-    height: 88,
+  avatarFallback: {
+    flex: 1,
     borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  roleChip: {
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 44,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -364,6 +405,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  tileContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
   divider: {
     height: 1,
     marginLeft: 56,
@@ -374,5 +419,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderWidth: 1.5,
+    marginTop: 28,
   },
 });

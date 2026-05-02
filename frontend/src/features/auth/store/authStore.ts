@@ -59,7 +59,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             email,
             firstName,
             lastName,
-            verificationStatus: 'notSubmitted',
+            profilePhotoUri: StorageService.getUserProfilePhotoUri(),
+            role: StorageService.getUserRole(),
+            isVerified: StorageService.getUserIsVerified(),
+            verificationStatus: StorageService.getUserVerificationStatus() ?? 'notSubmitted',
           };
           set({ currentUser: user });
           Logger.info(`User loaded from storage: ${user.email}`);
@@ -80,7 +83,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await StorageService.saveUserId(response.userId);
       await StorageService.saveUserEmail(response.email);
       await StorageService.saveUserName(response.firstName, response.lastName);
-      set({ currentUser: userFromAuthResponse(response), isLoading: false });
+      if (response.role) await StorageService.saveUserRole(response.role);
+      if (response.isVerified != null) await StorageService.saveUserIsVerified(response.isVerified);
+      await StorageService.saveUserVerificationStatus(response.verificationStatus);
+      set({
+        currentUser: {
+          ...userFromAuthResponse(response),
+          profilePhotoUri: StorageService.getUserProfilePhotoUri(),
+        },
+        isLoading: false,
+      });
       Logger.info(`Login successful: ${response.email}`);
       return true;
     } catch (e) {
@@ -96,7 +108,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await StorageService.saveUserId(response.userId);
       await StorageService.saveUserEmail(response.email);
       await StorageService.saveUserName(response.firstName, response.lastName);
-      set({ currentUser: userFromAuthResponse(response), isLoading: false });
+      if (response.role) await StorageService.saveUserRole(response.role);
+      if (response.isVerified != null) await StorageService.saveUserIsVerified(response.isVerified);
+      await StorageService.saveUserVerificationStatus(response.verificationStatus);
+      set({
+        currentUser: {
+          ...userFromAuthResponse(response),
+          profilePhotoUri: StorageService.getUserProfilePhotoUri(),
+        },
+        isLoading: false,
+      });
       Logger.info(`Registration successful: ${response.email}`);
       return true;
     } catch (e) {
@@ -157,6 +178,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         verificationReason: result.reason,
         isLoading: false,
       });
+      await StorageService.saveUserIsVerified(isApproved);
+      await StorageService.saveUserVerificationStatus(result.status);
       return true;
     } catch (e) {
       set({ isLoading: false, errorMessage: extractErrorMessage(e) });
@@ -179,6 +202,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         verificationReason: status.reason,
         verificationOcrData: status.ocrData,
       });
+      await StorageService.saveUserIsVerified(status.status === 'approved');
+      await StorageService.saveUserVerificationStatus(status.status);
     } catch {
       // Non-blocking refresh.
     }
