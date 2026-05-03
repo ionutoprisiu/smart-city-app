@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { ErrorMessage } from '../../../shared/components/ErrorMessage';
-import { useTheme } from '../../../theme';
+import { ErrorMessage } from '@shared/components/ErrorMessage';
+import { useTheme } from '@theme';
 import { AttractionCard } from '../components/AttractionCard';
 import { AttractionDetailsSheet } from '../components/AttractionDetailsSheet';
 import { EmptyState } from '../components/EmptyState';
@@ -135,12 +135,11 @@ export const VisitCityScreen: React.FC = () => {
 
   useEffect(() => {
     loadAttractions();
-    void fetchUserLocation();
+    fetchUserLocation().catch(() => {});
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadAttractions, fetchUserLocation]);
 
   const filteredAttractions = useMemo(() => {
     const next = attractions.filter((a) => matchesQuickFilter(a, quickFilter, selectedIds));

@@ -1,12 +1,12 @@
 import { create } from 'zustand';
-import { extractErrorMessage } from '../../../shared/api/errors';
-import { StorageService } from '../../../shared/storage/storageService';
-import { User } from '../../../shared/types/user';
-import { Logger } from '../../../shared/utils/logger';
+import { extractErrorMessage } from '@shared/api/errors';
+import { StorageService } from '@shared/storage/storageService';
+import { User } from '@shared/types/user';
+import { Logger } from '@shared/utils/logger';
 import {
   VerificationApi,
   VerificationImage,
-} from '../../verification/api/verificationApi';
+} from '@features/verification/api/verificationApi';
 import { AuthApi } from '../api/authApi';
 import {
   LoginRequest,
@@ -51,7 +51,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const userId = StorageService.getUserId();
       const email = StorageService.getUserEmail();
       const name = StorageService.getUserName();
-      if (userId != null && email && name) {
+      const token = StorageService.getUserToken();
+      if (userId != null && email && name && token) {
         const [firstName, lastName] = name.split('|');
         if (firstName && lastName) {
           const user: User = {
@@ -86,6 +87,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (response.role) await StorageService.saveUserRole(response.role);
       if (response.isVerified != null) await StorageService.saveUserIsVerified(response.isVerified);
       await StorageService.saveUserVerificationStatus(response.verificationStatus);
+      if (response.accessToken) await StorageService.saveUserToken(response.accessToken);
       set({
         currentUser: {
           ...userFromAuthResponse(response),
@@ -111,6 +113,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (response.role) await StorageService.saveUserRole(response.role);
       if (response.isVerified != null) await StorageService.saveUserIsVerified(response.isVerified);
       await StorageService.saveUserVerificationStatus(response.verificationStatus);
+      if (response.accessToken) await StorageService.saveUserToken(response.accessToken);
       set({
         currentUser: {
           ...userFromAuthResponse(response),
@@ -151,13 +154,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, errorMessage: null });
     try {
       const result = await VerificationApi.submit({
-        userId: user.id,
         idCardImage,
         selfieImage,
       });
 
       try {
-        const status = await VerificationApi.getStatus(user.id);
+        const status = await VerificationApi.getStatus();
         set({
           verificationScore: status.score,
           verificationReason: status.reason,
@@ -191,7 +193,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = get().currentUser;
     if (!user) return;
     try {
-      const status = await VerificationApi.getStatus(user.id);
+      const status = await VerificationApi.getStatus();
       set({
         currentUser: {
           ...user,

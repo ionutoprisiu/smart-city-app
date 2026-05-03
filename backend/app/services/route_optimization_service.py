@@ -1,5 +1,3 @@
-"""Build the ACO request, call the integration client, and shape the response."""
-
 from __future__ import annotations
 
 import logging
@@ -8,8 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.integrations import aco_client
-from app.integrations.aco_client import AcoServiceError
+from app.integrations.aco_client import AcoServiceError, optimize as aco_optimize
 from app.models.tourist_attraction import TouristAttraction
 
 log = logging.getLogger(__name__)
@@ -34,9 +31,8 @@ def optimize_route(
 
     log.info("Calling ACO optimize with routingProfile=%s", profile)
     try:
-        raw = aco_client.optimize(body)
+        raw = aco_optimize(body)
     except AcoServiceError as exc:
-        # Re-raise as RuntimeError so the API layer can map to a sensible HTTP code.
         raise RuntimeError(str(exc)) from exc
 
     response = _parse_aco_response(raw)
@@ -59,7 +55,7 @@ def _find_attractions_ordered(db: Session, ids: list[int]) -> list[TouristAttrac
         db.execute(
             select(TouristAttraction).where(
                 TouristAttraction.id.in_(ids),
-                TouristAttraction.is_active == True,  # noqa: E712
+                TouristAttraction.is_active.is_(True),
             )
         )
         .scalars()

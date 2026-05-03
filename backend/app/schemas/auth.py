@@ -26,4 +26,5 @@ class AuthResponse(BaseModel):
     lastName: str | None = None
     isVerified: bool | None = None
     verificationStatus: VerificationStatus | None = None
+    accessToken: str | None = None
     message: str

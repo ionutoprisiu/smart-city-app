@@ -8,9 +8,9 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { AppButton } from '../../../shared/components/AppButton';
-import { AddressService } from '../../../shared/services/addressService';
-import { useTheme } from '../../../theme';
+import { AppButton } from '@shared/components/AppButton';
+import { AddressService } from '@shared/services/addressService';
+import { useTheme } from '@theme';
 import { Attraction, categoryIcon, categoryLabel } from '../types';
 
 type Props = {

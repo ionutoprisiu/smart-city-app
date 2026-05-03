@@ -8,13 +8,12 @@ type Json = Record<string, unknown> | unknown[] | string | number | boolean | nu
 
 type RequestOptions = {
   token?: string | null;
-  userId?: number | null;
   signal?: AbortSignal;
   timeoutMs?: number;
 };
 
 const buildHeaders = (opts?: RequestOptions) =>
-  ApiConfig.getHeaders({ token: opts?.token ?? null, userId: opts?.userId ?? null });
+  ApiConfig.getHeaders({ token: opts?.token ?? null });
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return new Promise((resolve, reject) => {

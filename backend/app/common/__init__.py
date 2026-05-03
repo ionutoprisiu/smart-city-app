@@ -1,1 +1,1 @@
-"""Shared, domain-agnostic helpers (exceptions, types, validators)."""
+"""Shared helpers (exceptions, etc.)."""

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../theme';
+import { useTheme } from '@theme';
 
 type Props = {
   isLoading: boolean;

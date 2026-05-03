@@ -1,9 +1,9 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
-import { ActivitiesHomeScreen } from '../../features/activities/screens/ActivitiesHomeScreen';
-import { CreateClubScreen } from '../../features/activities/screens/CreateClubScreen';
-import { CreateEventScreen } from '../../features/activities/screens/CreateEventScreen';
-import { useTheme } from '../../theme';
+import { ActivitiesHomeScreen } from '@features/activities/screens/ActivitiesHomeScreen';
+import { CreateClubScreen } from '@features/activities/screens/CreateClubScreen';
+import { CreateEventScreen } from '@features/activities/screens/CreateEventScreen';
+import { useTheme } from '@theme';
 import { ActivitiesStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<ActivitiesStackParamList>();

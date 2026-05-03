@@ -8,7 +8,8 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useTheme } from '../../../theme';
+import { extractErrorMessage } from '@shared/api/errors';
+import { useTheme } from '@theme';
 import { ActivitiesApi } from '../api/activitiesApi';
 import { ActivityAnnouncement } from '../types';
 
@@ -67,10 +68,10 @@ export const AnnouncementsSection: React.FC<Props> = ({
       const list =
         kind === 'event'
           ? await ActivitiesApi.listEventAnnouncements(resourceId)
-          : await ActivitiesApi.listClubAnnouncements(resourceId, currentUserId!);
+          : await ActivitiesApi.listClubAnnouncements(resourceId);
       setItems(list);
     } catch (e: unknown) {
-      const msg = String((e as { message?: string })?.message ?? e ?? '');
+      const msg = extractErrorMessage(e);
       if (msg.includes('403') || msg.toLowerCase().includes('forbidden')) {
         setHint('You need to be an approved member to read announcements.');
       } else {
@@ -85,7 +86,9 @@ export const AnnouncementsSection: React.FC<Props> = ({
   const toggle = () => {
     const next = !expanded;
     setExpanded(next);
-    if (next) void load();
+    if (next) {
+      load().catch(() => {});
+    }
   };
 
   const onPost = async () => {
@@ -96,12 +99,10 @@ export const AnnouncementsSection: React.FC<Props> = ({
       const created =
         kind === 'event'
           ? await ActivitiesApi.createEventAnnouncement(resourceId, {
-              userId: currentUserId,
               title: title.trim(),
               body: body.trim(),
             })
           : await ActivitiesApi.createClubAnnouncement(resourceId, {
-              userId: currentUserId,
               title: title.trim(),
               body: body.trim(),
             });
@@ -109,7 +110,7 @@ export const AnnouncementsSection: React.FC<Props> = ({
       setTitle('');
       setBody('');
     } catch (e: unknown) {
-      setHint(String((e as { message?: string })?.message ?? e ?? 'Could not post announcement'));
+      setHint(extractErrorMessage(e) || 'Could not post announcement');
     } finally {
       setPosting(false);
     }
@@ -125,7 +126,13 @@ export const AnnouncementsSection: React.FC<Props> = ({
         ]}
       >
         <Icon name="campaign" size={18} color={theme.colors.primary} />
-        <Text style={[theme.typography.labelLarge, { color: theme.colors.primary, marginLeft: 8, flex: 1 }]}>
+        <Text
+          style={[
+            theme.typography.labelLarge,
+            styles.headerTitle,
+            { color: theme.colors.primary },
+          ]}
+        >
           {expanded ? 'Hide announcements' : 'Organizer announcements'}
         </Text>
         <Icon name={expanded ? 'expand-less' : 'expand-more'} size={22} color={theme.colors.onSurfaceVariant} />
@@ -135,7 +142,13 @@ export const AnnouncementsSection: React.FC<Props> = ({
         <View style={styles.body}>
           {loading ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
           {hint ? (
-            <Text style={[theme.typography.bodySmall, { color: theme.colors.onSurfaceVariant, marginBottom: 8 }]}>
+            <Text
+              style={[
+                theme.typography.bodySmall,
+                styles.hintText,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
               {hint}
             </Text>
           ) : null}
@@ -152,10 +165,18 @@ export const AnnouncementsSection: React.FC<Props> = ({
               ]}
             >
               <Text style={[theme.typography.titleSmall, { color: theme.colors.onSurface }]}>{a.title}</Text>
-              <Text style={[theme.typography.bodySmall, { color: theme.colors.onSurfaceVariant, marginTop: 4 }]}>
+              <Text
+                style={[
+                  theme.typography.bodySmall,
+                  styles.annDate,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
                 {fmtAnnDate(a.createdAt)}
               </Text>
-              <Text style={[theme.typography.bodyMedium, { color: theme.colors.onSurface, marginTop: 8 }]}>
+              <Text
+                style={[theme.typography.bodyMedium, styles.annBody, { color: theme.colors.onSurface }]}
+              >
                 {a.body}
               </Text>
             </View>
@@ -163,7 +184,13 @@ export const AnnouncementsSection: React.FC<Props> = ({
 
           {canPost && currentUserId != null ? (
             <View style={[styles.compose, { borderTopColor: theme.colors.outlineVariant + '40' }]}>
-              <Text style={[theme.typography.labelMedium, { color: theme.colors.onSurfaceVariant, marginBottom: 6 }]}>
+              <Text
+                style={[
+                  theme.typography.labelMedium,
+                  styles.composeLabel,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
                 New announcement
               </Text>
               <TextInput
@@ -231,6 +258,11 @@ export const AnnouncementsSection: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   wrap: { marginTop: 12 },
+  headerTitle: { marginLeft: 8, flex: 1 },
+  hintText: { marginBottom: 8 },
+  annDate: { marginTop: 4 },
+  annBody: { marginTop: 8 },
+  composeLabel: { marginBottom: 6 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

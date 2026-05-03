@@ -1,4 +1,4 @@
-"""Optional demo user for empty DB (local development)."""
+"""Optional seed users for local / empty databases (controlled via settings)."""
 
 from datetime import datetime
 
@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.security import hash_password
 from app.models.enums import Role
 from app.models.user import User
 
@@ -24,7 +25,7 @@ def seed_demo_user_if_enabled(db: Session) -> None:
     now = datetime.now()
     user = User(
         email=email,
-        password=settings.demo_user_password,
+        password=hash_password(settings.demo_user_password),
         first_name=first,
         last_name=last,
         name=f"{first} {last}".strip() or " ",
@@ -52,7 +53,7 @@ def seed_admin_user_if_enabled(db: Session) -> None:
     now = datetime.now()
     user = User(
         email=email,
-        password=settings.admin_user_password,
+        password=hash_password(settings.admin_user_password),
         first_name=first,
         last_name=last,
         name=f"{first} {last}".strip() or " ",

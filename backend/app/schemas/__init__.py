@@ -1,1 +1,1 @@
-"""Request/response schemas (Pydantic models)."""
+"""Pydantic request/response schemas."""

@@ -1,17 +1,11 @@
-"""Discover tourist attractions in Cluj-Napoca via the Overpass API.
-
-Owns parsing/mapping of raw Overpass elements into `TouristAttraction` ORM
-objects. The actual HTTP call lives in `app.integrations.overpass_client`.
-"""
-
 from __future__ import annotations
 
 import logging
 from collections import OrderedDict
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Any
 
+from app.common.utc import utc_now
 from app.integrations import overpass_client
 from app.models.enums import AttractionCategory
 from app.models.tourist_attraction import TouristAttraction
@@ -22,7 +16,6 @@ CITY = "Cluj-Napoca"
 
 
 def discover_attractions(lat: float, lon: float, radius_km: float) -> list[TouristAttraction]:
-    """Return a deduplicated list of attractions for the given area."""
     try:
         log.info("Discovering attractions in %s (city-wide)", CITY)
         city_wide = _parse_response(
@@ -108,8 +101,8 @@ def _parse_element(element: Mapping[str, Any]) -> TouristAttraction | None:
         category=category.value,
         estimated_visit_time=_estimate_visit_time(category),
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
 
 

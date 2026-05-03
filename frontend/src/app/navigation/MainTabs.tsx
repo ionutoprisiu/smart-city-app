@@ -3,9 +3,9 @@ import React from 'react';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivitiesStack } from './ActivitiesStack';
-import { ProfileScreen } from '../../features/profile/screens/ProfileScreen';
-import { VisitCityScreen } from '../../features/visit-city/screens/VisitCityScreen';
-import { useTheme } from '../../theme';
+import { ProfileScreen } from '@features/profile/screens/ProfileScreen';
+import { VisitCityScreen } from '@features/visit-city/screens/VisitCityScreen';
+import { useTheme } from '@theme';
 import { MainTabsParamList } from './types';
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();

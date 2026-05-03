@@ -1,19 +1,15 @@
-"""Shared application-level exceptions.
-
-These are mapped to HTTP responses by the handlers in `app.api.errors`.
-Keep them transport-agnostic (no FastAPI/HTTP imports here).
-"""
+"""Application-level exceptions (transport-agnostic; mapped to HTTP in ``api.errors``)."""
 
 from __future__ import annotations
 
 
 class AppError(Exception):
-    """Base class for application-level errors."""
+    """Base class for recoverable application errors."""
 
 
 class NotFoundError(AppError):
-    """Raised when a requested entity does not exist."""
+    """Raised when a referenced entity does not exist."""
 
 
 class ValidationAppError(AppError):
-    """Raised when input is structurally valid but violates business rules."""
+    """Raised when input is invalid for business rules."""

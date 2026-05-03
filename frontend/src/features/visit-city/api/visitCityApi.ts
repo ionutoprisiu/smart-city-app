@@ -1,5 +1,5 @@
-import { ApiClient } from '../../../shared/api/client';
-import { Logger } from '../../../shared/utils/logger';
+import { ApiClient } from '@shared/api/client';
+import { Logger } from '@shared/utils/logger';
 import {
   Attraction,
   RouteResult,

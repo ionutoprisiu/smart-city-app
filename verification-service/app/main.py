@@ -16,7 +16,12 @@ async def lifespan(_app: FastAPI):
 
 def create_app() -> FastAPI:
     configure_logging()
-    app = FastAPI(title="Verification Service", lifespan=lifespan)
+    app = FastAPI(
+        title="Verification Service",
+        version="1.0.0",
+        lifespan=lifespan,
+        openapi_tags=[{"name": "system"}, {"name": "verification"}],
+    )
     register_error_handlers(app)
     app.include_router(api_router)
     return app

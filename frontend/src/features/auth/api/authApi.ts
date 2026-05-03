@@ -1,6 +1,6 @@
-import { ApiClient } from '../../../shared/api/client';
-import { ApiConfig } from '../../../shared/api/config';
-import { Logger } from '../../../shared/utils/logger';
+import { ApiClient } from '@shared/api/client';
+import { ApiConfig } from '@shared/api/config';
+import { Logger } from '@shared/utils/logger';
 import {
   AuthResponse,
   LoginRequest,

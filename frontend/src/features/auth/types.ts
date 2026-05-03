@@ -1,9 +1,9 @@
-import { Role, roleFromString } from '../../shared/types/role';
-import { User } from '../../shared/types/user';
+import { Role, roleFromString } from '@shared/types/role';
+import { User } from '@shared/types/user';
 import {
   VerificationStatus,
   verificationStatusFromString,
-} from '../../shared/types/verification';
+} from '@shared/types/verification';
 
 export type LoginRequest = {
   email: string;
@@ -26,6 +26,7 @@ export type AuthResponse = {
   lastName: string;
   isVerified: boolean | null;
   verificationStatus: VerificationStatus;
+  accessToken?: string | null;
   message: string;
 };
 
@@ -37,6 +38,7 @@ export const authResponseFromJson = (json: any): AuthResponse => ({
   lastName: String(json?.lastName ?? ''),
   isVerified: typeof json?.isVerified === 'boolean' ? json.isVerified : null,
   verificationStatus: verificationStatusFromString(json?.verificationStatus),
+  accessToken: typeof json?.accessToken === 'string' ? json.accessToken : null,
   message: String(json?.message ?? ''),
 });
 

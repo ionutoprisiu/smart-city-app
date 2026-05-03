@@ -1,8 +1,4 @@
-"""Global exception handlers attached to the FastAPI app.
-
-Keeps the route layer free of repetitive try/except boilerplate by mapping
-common application-level exceptions to consistent HTTP responses.
-"""
+"""Global FastAPI exception handlers (maps domain errors to JSON responses)."""
 
 from __future__ import annotations
 
@@ -17,8 +13,6 @@ log = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Attach the project-wide exception handlers to the given FastAPI app."""
-
     @app.exception_handler(NotFoundError)
     async def handle_not_found(_request: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})

@@ -1,4 +1,4 @@
-"""Database engine, session factory, and declarative base."""
+"""Database primitives: metadata base, engine, and session factory."""
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine

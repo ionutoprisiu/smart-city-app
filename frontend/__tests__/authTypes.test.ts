@@ -1,7 +1,7 @@
 import {
   authResponseFromJson,
   userFromAuthResponse,
-} from '../src/features/auth/types';
+} from '@features/auth/types';
 
 describe('auth types mappers', () => {
   test('authResponseFromJson maps backend payload correctly', () => {

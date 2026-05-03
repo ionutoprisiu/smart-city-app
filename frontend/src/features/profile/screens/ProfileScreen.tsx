@@ -1,16 +1,16 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { AppRootStackParamList } from '../../../app/navigation/types';
-import { StorageService } from '../../../shared/storage/storageService';
-import { fullName } from '../../../shared/types/user';
-import { roleDisplay } from '../../../shared/types/role';
-import { verificationStatusLabel } from '../../../shared/types/verification';
-import { useTheme } from '../../../theme';
-import { useAuthStore } from '../../auth/store/authStore';
+import { AppRootStackParamList } from '@app/navigation/types';
+import { StorageService } from '@shared/storage/storageService';
+import { fullName } from '@shared/types/user';
+import { roleDisplay } from '@shared/types/role';
+import { verificationStatusLabel } from '@shared/types/verification';
+import { useTheme } from '@theme';
+import { useAuthStore } from '@features/auth/store/authStore';
 
 type Nav = NativeStackNavigationProp<AppRootStackParamList>;
 
@@ -93,10 +93,28 @@ export const ProfileScreen: React.FC = () => {
 
   const openPhotoActions = () => {
     Alert.alert('Profile photo', 'Choose an action', [
-      { text: 'Take photo', onPress: () => void takePhoto() },
-      { text: 'Choose from gallery', onPress: () => void chooseFromGallery() },
+      {
+        text: 'Take photo',
+        onPress: () => {
+          takePhoto().catch(() => {});
+        },
+      },
+      {
+        text: 'Choose from gallery',
+        onPress: () => {
+          chooseFromGallery().catch(() => {});
+        },
+      },
       ...(currentUser.profilePhotoUri
-        ? [{ text: 'Remove photo', style: 'destructive' as const, onPress: () => void updateProfilePhoto(null) }]
+        ? [
+            {
+              text: 'Remove photo',
+              style: 'destructive' as const,
+              onPress: () => {
+                updateProfilePhoto(null).catch(() => {});
+              },
+            },
+          ]
         : []),
       { text: 'Cancel', style: 'cancel' },
     ]);
@@ -164,7 +182,13 @@ export const ProfileScreen: React.FC = () => {
         <Text style={[theme.typography.titleLarge, { color: theme.colors.onSurface, marginTop: theme.spacing.medium }]}>
           {fullName(currentUser)}
         </Text>
-        <Text style={[theme.typography.bodyMedium, { color: theme.colors.onSurfaceVariant, marginTop: 6 }]}>
+        <Text
+          style={[
+            theme.typography.bodyMedium,
+            styles.emailSubtitle,
+            { color: theme.colors.onSurfaceVariant },
+          ]}
+        >
           {currentUser.email}
         </Text>
 
@@ -175,13 +199,19 @@ export const ProfileScreen: React.FC = () => {
               size={16}
               color={theme.colors.primary}
             />
-            <Text style={[theme.typography.labelMedium, { color: theme.colors.onSurface, marginLeft: 6 }]}>
+            <Text
+              style={[
+                theme.typography.labelMedium,
+                styles.metaChipLabel,
+                { color: theme.colors.onSurface },
+              ]}
+            >
               {roleDisplay(currentUser.role)}
             </Text>
           </View>
-          <View style={[styles.metaChip, { backgroundColor: vTone.bg, borderColor: 'transparent' }]}>
+          <View style={[styles.metaChip, styles.metaChipVerification, { backgroundColor: vTone.bg }]}>
             <Icon name={vTone.icon} size={16} color={vTone.color} />
-            <Text style={[theme.typography.labelMedium, { color: vTone.color, marginLeft: 6 }]}>
+            <Text style={[theme.typography.labelMedium, styles.metaChipLabel, { color: vTone.color }]}>
               {verificationStatusLabel(currentUser.verificationStatus)}
             </Text>
           </View>
@@ -232,7 +262,7 @@ export const ProfileScreen: React.FC = () => {
         ]}
       >
         <Icon name="logout" size={20} color={theme.colors.error} />
-        <Text style={[theme.typography.labelLarge, { color: theme.colors.error, marginLeft: 8 }]}>
+        <Text style={[theme.typography.labelLarge, styles.signOutLabel, { color: theme.colors.error }]}>
           Sign out
         </Text>
       </Pressable>
@@ -247,40 +277,42 @@ type SectionProps = {
 
 const Section: React.FC<SectionProps> = ({ title, children }) => {
   const theme = useTheme();
+  const sectionOuterStyle = useMemo(() => ({ marginTop: theme.spacing.large }), [theme]);
+  const sectionTitleStyle = useMemo(
+    () => [
+      theme.typography.labelMedium,
+      {
+        color: theme.colors.onSurfaceVariant,
+        letterSpacing: 0.8,
+        marginLeft: 6,
+        marginBottom: 10,
+      },
+    ],
+    [theme],
+  );
+  const sectionCardStyle = useMemo(
+    () => [
+      styles.sectionCard,
+      {
+        backgroundColor: theme.colors.surfaceContainerHighest + '8C',
+        borderRadius: theme.radius.round,
+      },
+    ],
+    [theme],
+  );
+  const dividerTintStyle = useMemo(
+    () => ({ backgroundColor: theme.colors.outline + '1F' }),
+    [theme],
+  );
   return (
-    <View style={{ marginTop: theme.spacing.large }}>
-      <Text
-        style={[
-          theme.typography.labelMedium,
-          {
-            color: theme.colors.onSurfaceVariant,
-            letterSpacing: 0.8,
-            marginLeft: 6,
-            marginBottom: 10,
-          },
-        ]}
-      >
-        {title.toUpperCase()}
-      </Text>
-      <View
-        style={[
-          styles.sectionCard,
-          {
-            backgroundColor: theme.colors.surfaceContainerHighest + '8C',
-            borderRadius: theme.radius.round,
-          },
-        ]}
-      >
+    <View style={sectionOuterStyle}>
+      <Text style={sectionTitleStyle}>{title.toUpperCase()}</Text>
+      <View style={sectionCardStyle}>
         {React.Children.toArray(children).map((child, idx, all) => (
           <React.Fragment key={idx}>
             {child}
             {idx < all.length - 1 ? (
-              <View
-                style={[
-                  styles.divider,
-                  { backgroundColor: theme.colors.outline + '1F' },
-                ]}
-              />
+              <View style={[styles.divider, dividerTintStyle]} />
             ) : null}
           </React.Fragment>
         ))}
@@ -319,7 +351,13 @@ const ProfileTile: React.FC<TileProps> = ({
         <Text style={[theme.typography.titleSmall, { color: theme.colors.onSurface }]}>
           {title}
         </Text>
-        <Text style={[theme.typography.bodySmall, { color: theme.colors.onSurfaceVariant, marginTop: 2 }]}>
+        <Text
+          style={[
+            theme.typography.bodySmall,
+            styles.tileSubtitle,
+            { color: theme.colors.onSurfaceVariant },
+          ]}
+        >
           {subtitle}
         </Text>
       </View>
@@ -420,5 +458,20 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderWidth: 1.5,
     marginTop: 28,
+  },
+  emailSubtitle: {
+    marginTop: 6,
+  },
+  metaChipLabel: {
+    marginLeft: 6,
+  },
+  metaChipVerification: {
+    borderColor: 'transparent',
+  },
+  signOutLabel: {
+    marginLeft: 8,
+  },
+  tileSubtitle: {
+    marginTop: 2,
   },
 });

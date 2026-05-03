@@ -16,16 +16,16 @@ import {
   launchImageLibrary,
 } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { AppButton } from '../../../shared/components/AppButton';
-import { ErrorMessage } from '../../../shared/components/ErrorMessage';
-import { LoadingOverlay } from '../../../shared/components/LoadingOverlay';
-import { useTheme } from '../../../theme';
+import { AppButton } from '@shared/components/AppButton';
+import { ErrorMessage } from '@shared/components/ErrorMessage';
+import { LoadingOverlay } from '@shared/components/LoadingOverlay';
+import { useTheme } from '@theme';
 import {
   VerificationStatus,
   verificationStatusLabel,
-} from '../../../shared/types/verification';
-import { AppRootStackParamList } from '../../../app/navigation/types';
-import { useAuthStore } from '../../auth/store/authStore';
+} from '@shared/types/verification';
+import { AppRootStackParamList } from '@app/navigation/types';
+import { useAuthStore } from '@features/auth/store/authStore';
 
 type Nav = NativeStackNavigationProp<AppRootStackParamList, 'Verification'>;
 
@@ -62,8 +62,7 @@ export const VerificationScreen: React.FC = () => {
 
   useEffect(() => {
     refreshVerificationStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshVerificationStatus]);
 
   const showSourcePicker = (kind: 'idCard' | 'selfie') => {
     Alert.alert(

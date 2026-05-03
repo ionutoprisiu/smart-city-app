@@ -23,3 +23,10 @@ declare module 'react-native-vector-icons/MaterialCommunityIcons' {
 
   export default class Icon extends Component<IconProps> {}
 }
+
+declare global {
+  // Optional runtime overrides used by ApiConfig in development.
+  // They are injected manually from dev tools when needed.
+  var __APP_LOCAL_IP__: string | undefined;
+  var __APP_API_BASE_URL__: string | undefined;
+}

@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.utc import utc_now
 from app.db.base import Base
 
 
@@ -22,12 +23,12 @@ class TouristAttraction(Base):
     )
     is_active: Mapped[bool] = mapped_column("is_active", Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        "created_at", DateTime, default=datetime.utcnow, nullable=False
+        "created_at", DateTime, default=utc_now, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         "updated_at",
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
         nullable=False,
     )

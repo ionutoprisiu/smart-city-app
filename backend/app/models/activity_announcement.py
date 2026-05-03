@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.utc import utc_now
 from app.db.base import Base
 
 
@@ -23,4 +24,4 @@ class ActivityAnnouncement(Base):
     event_id: Mapped[int | None] = mapped_column(ForeignKey("activity_events.id"), nullable=True)
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now)

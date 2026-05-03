@@ -1,7 +1,7 @@
-import { ApiConfig } from '../../../shared/api/config';
-import { ApiError } from '../../../shared/api/errors';
-import { StorageService } from '../../../shared/storage/storageService';
-import { Logger } from '../../../shared/utils/logger';
+import { ApiConfig } from '@shared/api/config';
+import { ApiError } from '@shared/api/errors';
+import { StorageService } from '@shared/storage/storageService';
+import { Logger } from '@shared/utils/logger';
 import {
   VerificationStatusResponse,
   VerificationSubmitResponse,
@@ -45,8 +45,6 @@ const buildAuthHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = {};
   const token = StorageService.getUserToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const userId = StorageService.getUserId();
-  if (userId != null) headers['X-User-Id'] = String(userId);
   return headers;
 };
 
@@ -58,14 +56,12 @@ const fileNameFromUri = (uri: string, fallback: string) => {
 
 export const VerificationApi = {
   async submit(args: {
-    userId: number;
     idCardImage: VerificationImage;
     selfieImage: VerificationImage;
   }): Promise<VerificationSubmitResponse> {
     const url = `${ApiConfig.baseUrl}${ApiConfig.verificationEndpoint}/submit`;
 
     const formData = new FormData();
-    formData.append('userId', String(args.userId));
     formData.append('idCardImage', {
       uri: args.idCardImage.uri,
       name: args.idCardImage.fileName ?? fileNameFromUri(args.idCardImage.uri, 'id-card.jpg'),
@@ -92,8 +88,8 @@ export const VerificationApi = {
     }
   },
 
-  async getStatus(userId: number): Promise<VerificationStatusResponse> {
-    const url = `${ApiConfig.baseUrl}${ApiConfig.verificationEndpoint}/status/${userId}`;
+  async getStatus(): Promise<VerificationStatusResponse> {
+    const url = `${ApiConfig.baseUrl}${ApiConfig.verificationEndpoint}/status`;
     try {
       const response = await fetchWithTimeout(
         url,

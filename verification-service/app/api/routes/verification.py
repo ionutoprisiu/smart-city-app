@@ -3,10 +3,10 @@ from fastapi import APIRouter, File, Form, UploadFile
 from app.schemas import VerificationResponse
 from app.services import verify_identity
 
-router = APIRouter()
+router = APIRouter(tags=["verification"])
 
 
-@router.get("/health")
+@router.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
 

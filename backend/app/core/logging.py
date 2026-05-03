@@ -1,4 +1,4 @@
-"""Centralized logging configuration."""
+"""Process-wide logging configuration (called once at startup)."""
 
 from __future__ import annotations
 
@@ -8,5 +8,4 @@ DEFAULT_FORMAT = "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Configure root logging once for the whole backend process."""
     logging.basicConfig(level=level, format=DEFAULT_FORMAT)

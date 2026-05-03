@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { AddressService } from '../../../shared/services/addressService';
-import { useTheme } from '../../../theme';
+import { AddressService } from '@shared/services/addressService';
+import { useTheme } from '@theme';
 import { Attraction, categoryIcon } from '../types';
 
 type Props = {
@@ -60,7 +60,7 @@ export const AttractionCard: React.FC<Props> = ({
     return () => {
       cancelled = true;
     };
-  }, [attraction.latitude, attraction.longitude]);
+  }, [attraction.latitude, attraction.longitude, attraction.city]);
 
   return (
     <Pressable

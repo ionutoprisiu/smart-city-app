@@ -1,20 +1,24 @@
-import { ApiClient } from '../../../shared/api/client';
-import { Logger } from '../../../shared/utils/logger';
-import { authResponseFromJson, AuthResponse } from '../../auth/types';
+import { ApiClient } from '@shared/api/client';
+import { Logger } from '@shared/utils/logger';
+import { authResponseFromJson, AuthResponse } from '@features/auth/types';
 import { ACTIVITIES_CITY } from '../constants';
 import {
   ActivityAnnouncement,
+  ActivityChatMessage,
+  ActivityChatPostResult,
   ActivityEvent,
   announcementFromJson,
+  chatMessageFromJson,
+  chatPostResultFromJson,
   Club,
   clubFromJson,
   eventFromJson,
 } from '../types';
 
 export const ActivitiesApi = {
-  async becomeOrganizer(userId: number): Promise<AuthResponse> {
+  async becomeOrganizer(): Promise<AuthResponse> {
     try {
-      const data = await ApiClient.post('/activities/become-organizer', { userId });
+      const data = await ApiClient.post('/activities/become-organizer', {});
       return authResponseFromJson(data);
     } catch (e) {
       Logger.error('Failed to become organizer', e);
@@ -32,9 +36,9 @@ export const ActivitiesApi = {
     }
   },
 
-  async listMyEvents(userId: number): Promise<ActivityEvent[]> {
+  async listMyEvents(): Promise<ActivityEvent[]> {
     try {
-      const data = await ApiClient.getList(`/activities/events/mine?userId=${encodeURIComponent(String(userId))}`);
+      const data = await ApiClient.getList('/activities/events/mine');
       return data.map((x) => eventFromJson(x));
     } catch (e) {
       Logger.error('Failed to list my events', e);
@@ -43,7 +47,6 @@ export const ActivitiesApi = {
   },
 
   async createEvent(args: {
-    creatorUserId: number;
     title: string;
     description?: string;
     category?: string;
@@ -54,7 +57,6 @@ export const ActivitiesApi = {
     endsAt: string;
   }): Promise<ActivityEvent> {
     const data = await ApiClient.post('/activities/events', {
-      creatorUserId: args.creatorUserId,
       title: args.title,
       description: args.description ?? null,
       category: args.category ?? 'GENERAL',
@@ -68,10 +70,9 @@ export const ActivitiesApi = {
     return eventFromJson(data);
   },
 
-  async listClubs(userId?: number): Promise<Club[]> {
-    const suffix = userId != null ? `?userId=${encodeURIComponent(String(userId))}` : '';
+  async listClubs(): Promise<Club[]> {
     try {
-      const data = await ApiClient.getList(`/activities/clubs${suffix}`);
+      const data = await ApiClient.getList('/activities/clubs');
       return data.map((x) => clubFromJson(x));
     } catch (e) {
       Logger.error('Failed to list clubs', e);
@@ -79,9 +80,9 @@ export const ActivitiesApi = {
     }
   },
 
-  async listMyClubs(userId: number): Promise<Club[]> {
+  async listMyClubs(): Promise<Club[]> {
     try {
-      const data = await ApiClient.getList(`/activities/clubs/mine?userId=${encodeURIComponent(String(userId))}`);
+      const data = await ApiClient.getList('/activities/clubs/mine');
       return data.map((x) => clubFromJson(x));
     } catch (e) {
       Logger.error('Failed to list my clubs', e);
@@ -90,14 +91,12 @@ export const ActivitiesApi = {
   },
 
   async createClub(args: {
-    creatorUserId: number;
     name: string;
     description?: string;
     category?: string;
     visibility?: string;
   }): Promise<Club> {
     const data = await ApiClient.post('/activities/clubs', {
-      creatorUserId: args.creatorUserId,
       name: args.name,
       description: args.description ?? null,
       category: args.category ?? 'OTHER',
@@ -107,18 +106,18 @@ export const ActivitiesApi = {
     return clubFromJson(data);
   },
 
-  async joinClub(clubId: number, userId: number): Promise<Club> {
-    const data = await ApiClient.post(`/activities/clubs/${clubId}/join`, { userId });
+  async joinClub(clubId: number): Promise<Club> {
+    const data = await ApiClient.post(`/activities/clubs/${clubId}/join`, {});
     return clubFromJson(data);
   },
 
-  async leaveClub(clubId: number, userId: number): Promise<Club> {
-    const data = await ApiClient.post(`/activities/clubs/${clubId}/leave`, { userId });
+  async leaveClub(clubId: number): Promise<Club> {
+    const data = await ApiClient.post(`/activities/clubs/${clubId}/leave`, {});
     return clubFromJson(data);
   },
 
-  async cancelEvent(eventId: number, userId: number): Promise<ActivityEvent> {
-    const data = await ApiClient.post(`/activities/events/${eventId}/cancel`, { userId });
+  async cancelEvent(eventId: number): Promise<ActivityEvent> {
+    const data = await ApiClient.post(`/activities/events/${eventId}/cancel`, {});
     return eventFromJson(data);
   },
 
@@ -129,24 +128,56 @@ export const ActivitiesApi = {
 
   async createEventAnnouncement(
     eventId: number,
-    args: { userId: number; title: string; body: string },
+    args: { title: string; body: string },
   ): Promise<ActivityAnnouncement> {
     const data = await ApiClient.post(`/activities/events/${eventId}/announcements`, args);
     return announcementFromJson(data);
   },
 
-  async listClubAnnouncements(clubId: number, userId: number): Promise<ActivityAnnouncement[]> {
-    const data = await ApiClient.getList(
-      `/activities/clubs/${clubId}/announcements?userId=${encodeURIComponent(String(userId))}`,
-    );
+  async listClubAnnouncements(clubId: number): Promise<ActivityAnnouncement[]> {
+    const data = await ApiClient.getList(`/activities/clubs/${clubId}/announcements`);
     return data.map((x) => announcementFromJson(x));
   },
 
   async createClubAnnouncement(
     clubId: number,
-    args: { userId: number; title: string; body: string },
+    args: { title: string; body: string },
   ): Promise<ActivityAnnouncement> {
     const data = await ApiClient.post(`/activities/clubs/${clubId}/announcements`, args);
     return announcementFromJson(data);
+  },
+
+  async listEventChat(eventId: number): Promise<ActivityChatMessage[]> {
+    const data = await ApiClient.getList(`/activities/events/${eventId}/chat`);
+    return data.map((x) => chatMessageFromJson(x));
+  },
+
+  async postEventChat(
+    eventId: number,
+    args: { role: 'USER' | 'ORGANIZER'; body: string; inReplyToMessageId?: number | null },
+  ): Promise<ActivityChatPostResult> {
+    const data = await ApiClient.post(`/activities/events/${eventId}/chat`, {
+      role: args.role,
+      body: args.body,
+      inReplyToMessageId: args.inReplyToMessageId ?? null,
+    });
+    return chatPostResultFromJson(data);
+  },
+
+  async listClubChat(clubId: number): Promise<ActivityChatMessage[]> {
+    const data = await ApiClient.getList(`/activities/clubs/${clubId}/chat`);
+    return data.map((x) => chatMessageFromJson(x));
+  },
+
+  async postClubChat(
+    clubId: number,
+    args: { role: 'USER' | 'ORGANIZER'; body: string; inReplyToMessageId?: number | null },
+  ): Promise<ActivityChatPostResult> {
+    const data = await ApiClient.post(`/activities/clubs/${clubId}/chat`, {
+      role: args.role,
+      body: args.body,
+      inReplyToMessageId: args.inReplyToMessageId ?? null,
+    });
+    return chatPostResultFromJson(data);
   },
 };

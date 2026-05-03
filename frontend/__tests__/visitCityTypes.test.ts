@@ -2,7 +2,7 @@ import {
   attractionFromJson,
   categoryFromString,
   routeResultFromJson,
-} from '../src/features/visit-city/types';
+} from '@features/visit-city/types';
 
 describe('visit-city type mappers', () => {
   test('categoryFromString falls back to other', () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useTheme } from '../../../theme';
+import { useTheme } from '@theme';
 import { RouteResult } from '../types';
 
 type Props = {

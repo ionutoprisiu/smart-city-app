@@ -1,5 +1,3 @@
-"""Visit City — attractions + live merge + optimize (ported from VisitCityService)."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -18,6 +16,103 @@ CLUJ_RADIUS_KM = 12.0
 CLUJ = "Cluj-Napoca"
 
 
+def get_attractions(db: Session, category: str | None, q: str | None) -> list[dict[str, Any]]:
+    if category and str(category).strip():
+        try:
+            cat_enum = AttractionCategory[category.strip().upper()]
+        except KeyError:
+            cat_enum = None
+        if cat_enum:
+            rows = db.execute(
+                select(TouristAttraction)
+                .where(
+                    TouristAttraction.category == cat_enum.value,
+                    TouristAttraction.is_active.is_(True),
+                )
+                .order_by(TouristAttraction.name)
+            ).scalars().all()
+            return [_map_to_dict(a) for a in rows]
+
+    if q and str(q).strip():
+        rows = db.execute(_select_active_by_text(q.strip())).scalars().all()
+        return [_map_to_dict(a) for a in rows]
+
+    rows = db.execute(_select_all_active_ordered()).scalars().all()
+    return [_map_to_dict(a) for a in rows]
+
+
+def get_live_attractions(db: Session, q: str | None, limit: int | None) -> list[dict[str, Any]]:
+    capped = max(1, min(limit or 300, 500))
+    query = (q or "").strip().lower()
+
+    discovered = attraction_discovery_service.discover_attractions(CLUJ_CENTER_LAT, CLUJ_CENTER_LON, CLUJ_RADIUS_KM)
+    seen_names = {
+        (a.name or "").strip().lower()
+        for a in discovered
+        if a.name and str(a.name).strip()
+    }
+
+    normalized = [
+        a
+        for a in discovered
+        if a.name and str(a.name).strip()
+        and (
+            not query
+            or query in (a.name or "").lower()
+            or (a.description and query in (a.description or "").lower())
+        )
+    ]
+
+    upserted = _batch_upsert(db, normalized)
+
+    if not query:
+        db_matches = db.execute(_select_all_active_ordered()).scalars().all()
+    else:
+        db_matches = db.execute(_select_active_by_text(query)).scalars().all()
+
+    merged: dict[int, TouristAttraction] = {a.id: a for a in upserted}
+    for a in db_matches:
+        n = (a.name or "").strip().lower()
+        if n and n not in seen_names:
+            merged[a.id] = a
+
+    sorted_list = sorted(merged.values(), key=lambda x: (x.name or "").lower())[:capped]
+    return [_map_to_dict(a) for a in sorted_list]
+
+
+def optimize_route_api(
+    db: Session,
+    attraction_ids: list[int],
+    start_lat: float | None,
+    start_lon: float | None,
+    routing_profile: str,
+) -> dict[str, Any]:
+    return optimize_route(db, attraction_ids, start_lat, start_lon, routing_profile)
+
+
+def _select_all_active_ordered():
+    return (
+        select(TouristAttraction)
+        .where(TouristAttraction.is_active.is_(True))
+        .order_by(TouristAttraction.name)
+    )
+
+
+def _select_active_by_text(term: str):
+    pattern = f"%{term}%"
+    return (
+        select(TouristAttraction)
+        .where(
+            TouristAttraction.is_active.is_(True),
+            or_(
+                func.lower(TouristAttraction.name).like(func.lower(pattern)),
+                func.lower(TouristAttraction.description).like(func.lower(pattern)),
+            ),
+        )
+        .order_by(TouristAttraction.name)
+    )
+
+
 def _map_to_dict(a: TouristAttraction) -> dict[str, Any]:
     return {
         "id": a.id,
@@ -30,56 +125,6 @@ def _map_to_dict(a: TouristAttraction) -> dict[str, Any]:
         "imageUrl": a.image_url,
         "isActive": a.is_active,
     }
-
-
-def get_attractions(db: Session, category: str | None, q: str | None) -> list[dict[str, Any]]:
-    if category and str(category).strip():
-        try:
-            cat = AttractionCategory[category.strip().upper()]
-        except KeyError:
-            cat = None
-        if cat:
-            rows = (
-                db.execute(
-                    select(TouristAttraction)
-                    .where(
-                        TouristAttraction.category == cat.value,
-                        TouristAttraction.is_active == True,  # noqa: E712
-                    )
-                    .order_by(TouristAttraction.name)
-                )
-                .scalars()
-                .all()
-            )
-            return [_map_to_dict(a) for a in rows]
-
-    if q and str(q).strip():
-        term = f"%{q.strip()}%"
-        rows = (
-            db.execute(
-                select(TouristAttraction).where(
-                    TouristAttraction.is_active == True,  # noqa: E712
-                    or_(
-                        func.lower(TouristAttraction.name).like(func.lower(term)),
-                        func.lower(TouristAttraction.description).like(func.lower(term)),
-                    ),
-                ).order_by(TouristAttraction.name)
-            )
-            .scalars()
-            .all()
-        )
-        return [_map_to_dict(a) for a in rows]
-
-    rows = (
-        db.execute(
-            select(TouristAttraction)
-            .where(TouristAttraction.is_active == True)  # noqa: E712
-            .order_by(TouristAttraction.name)
-        )
-        .scalars()
-        .all()
-    )
-    return [_map_to_dict(a) for a in rows]
 
 
 def _find_existing(db: Session, discovered: TouristAttraction) -> TouristAttraction | None:
@@ -116,71 +161,3 @@ def _batch_upsert(db: Session, attractions: list[TouristAttraction]) -> list[Tou
         for item in new_items:
             db.refresh(item)
     return result
-
-
-def get_live_attractions(db: Session, q: str | None, limit: int | None) -> list[dict[str, Any]]:
-    capped = max(1, min(limit or 300, 500))
-    query = (q or "").strip().lower()
-
-    discovered = attraction_discovery_service.discover_attractions(CLUJ_CENTER_LAT, CLUJ_CENTER_LON, CLUJ_RADIUS_KM)
-    seen_names = {
-        (a.name or "").strip().lower()
-        for a in discovered
-        if a.name and str(a.name).strip()
-    }
-
-    normalized = [
-        a
-        for a in discovered
-        if a.name and str(a.name).strip()
-        and (
-            not query
-            or query in (a.name or "").lower()
-            or (a.description and query in (a.description or "").lower())
-        )
-    ]
-
-    upserted = _batch_upsert(db, normalized)
-
-    if not query:
-        db_matches = (
-            db.execute(
-                select(TouristAttraction).where(TouristAttraction.is_active == True).order_by(TouristAttraction.name)  # noqa: E712
-            )
-            .scalars()
-            .all()
-        )
-    else:
-        term = f"%{query}%"
-        db_matches = (
-            db.execute(
-                select(TouristAttraction).where(
-                    TouristAttraction.is_active == True,  # noqa: E712
-                    or_(
-                        func.lower(TouristAttraction.name).like(func.lower(term)),
-                        func.lower(TouristAttraction.description).like(func.lower(term)),
-                    ),
-                ).order_by(TouristAttraction.name)
-            )
-            .scalars()
-            .all()
-        )
-
-    merged: dict[int, TouristAttraction] = {a.id: a for a in upserted}
-    for a in db_matches:
-        n = (a.name or "").strip().lower()
-        if n and n not in seen_names:
-            merged[a.id] = a
-
-    sorted_list = sorted(merged.values(), key=lambda x: (x.name or "").lower())[:capped]
-    return [_map_to_dict(a) for a in sorted_list]
-
-
-def optimize_route_api(
-    db: Session,
-    attraction_ids: list[int],
-    start_lat: float | None,
-    start_lon: float | None,
-    routing_profile: str,
-) -> dict[str, Any]:
-    return optimize_route(db, attraction_ids, start_lat, start_lon, routing_profile)

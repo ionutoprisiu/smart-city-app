@@ -16,8 +16,8 @@ import MapView, {
 } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { AppButton } from '../../../shared/components/AppButton';
-import { useTheme } from '../../../theme';
+import { AppButton } from '@shared/components/AppButton';
+import { useTheme } from '@theme';
 import { CustomPinsBanner } from '../components/CustomPinsBanner';
 import { MapControlsCard } from '../components/MapControlsCard';
 import { RouteInfoCard } from '../components/RouteInfoCard';
@@ -118,15 +118,15 @@ const bearingDeg = (
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 };
 
-/** Move a WGS84 point by `distanceM` meters along `bearingDeg` (geodesic). */
+/** Move a WGS84 point by `distanceM` meters along `bearingDegrees` (geodesic). */
 const movePointByBearingMeters = (
   latitude: number,
   longitude: number,
-  bearingDeg: number,
+  bearingDegrees: number,
   distanceM: number,
 ) => {
   const R = earthRadiusMeters;
-  const brng = (bearingDeg * Math.PI) / 180;
+  const brng = (bearingDegrees * Math.PI) / 180;
   const φ1 = (latitude * Math.PI) / 180;
   const λ1 = (longitude * Math.PI) / 180;
   const δ = distanceM / R;
@@ -497,9 +497,7 @@ export const MapScreen: React.FC = () => {
     addCustomPin(coordinate.latitude, coordinate.longitude);
   };
 
-  const onMapPress = (_event: MapPressEvent) => {
-    // intentionally empty — taps on markers handle their own logic.
-  };
+  const onMapPress = (_event: MapPressEvent) => {};
 
   const mapRoutingProfile: RoutingProfile = routeResult?.routingProfile ?? routingProfile;
   const footOnMap = mapRoutingProfile === 'foot';
@@ -512,17 +510,21 @@ export const MapScreen: React.FC = () => {
 
   const usePolylineLateralOffset = mapRoutingProfile === 'driving';
 
-  const orderMap: Record<number, number> = {};
-  if (routeResult != null) {
-    routeResult.steps.forEach((step) => {
-      if (step.attractionId > 0) orderMap[step.attractionId] = step.order;
-    });
-  }
+  const orderMap = useMemo(() => {
+    const next: Record<number, number> = {};
+    if (routeResult != null) {
+      routeResult.steps.forEach((step) => {
+        if (step.attractionId > 0) next[step.attractionId] = step.order;
+      });
+    }
+    return next;
+  }, [routeResult]);
 
-  const visibleAttractions =
-    routeResult != null
-      ? attractions.filter((a) => orderMap[a.id] != null)
-      : attractions;
+  const visibleAttractions = useMemo(
+    () =>
+      routeResult != null ? attractions.filter((a) => orderMap[a.id] != null) : attractions,
+    [attractions, orderMap, routeResult],
+  );
 
   const viewportAttractions = useMemo(
     () => visibleAttractions.filter((a) => attractionInViewport(a, mapRegion)),

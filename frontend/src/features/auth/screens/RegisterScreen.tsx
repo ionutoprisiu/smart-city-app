@@ -3,12 +3,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { AppButton } from '../../../shared/components/AppButton';
-import { CustomTextField } from '../../../shared/components/CustomTextField';
-import { LoadingOverlay } from '../../../shared/components/LoadingOverlay';
-import { Validators } from '../../../shared/utils/validators';
-import { useTheme } from '../../../theme';
-import { AuthStackParamList } from '../../../app/navigation/types';
+import { AppButton } from '@shared/components/AppButton';
+import { CustomTextField } from '@shared/components/CustomTextField';
+import { LoadingOverlay } from '@shared/components/LoadingOverlay';
+import { Validators } from '@shared/utils/validators';
+import { useTheme } from '@theme';
+import { AuthStackParamList } from '@app/navigation/types';
 import { useAuthStore } from '../store/authStore';
 
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Register'>;

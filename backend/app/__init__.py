@@ -1,1 +1,1 @@
-"""Smart City backend application."""
+"""Smart City backend application package."""

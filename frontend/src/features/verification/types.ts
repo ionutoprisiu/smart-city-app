@@ -1,7 +1,7 @@
 import {
   VerificationStatus,
   verificationStatusFromString,
-} from '../../shared/types/verification';
+} from '@shared/types/verification';
 
 export type VerificationSubmitResponse = {
   userId: number;

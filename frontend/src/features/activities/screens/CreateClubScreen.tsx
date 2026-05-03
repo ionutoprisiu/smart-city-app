@@ -2,11 +2,11 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ActivitiesStackParamList } from '../../../app/navigation/types';
-import { AppButton } from '../../../shared/components/AppButton';
-import { ErrorMessage } from '../../../shared/components/ErrorMessage';
-import { useTheme } from '../../../theme';
-import { useAuthStore } from '../../auth/store/authStore';
+import { ActivitiesStackParamList } from '@app/navigation/types';
+import { AppButton } from '@shared/components/AppButton';
+import { ErrorMessage } from '@shared/components/ErrorMessage';
+import { useTheme } from '@theme';
+import { useAuthStore } from '@features/auth/store/authStore';
 import { ActivitiesApi } from '../api/activitiesApi';
 import { ACTIVITIES_CITY } from '../constants';
 
@@ -56,7 +56,6 @@ export const CreateClubScreen: React.FC = () => {
     setIsSubmitting(true);
     try {
       await ActivitiesApi.createClub({
-        creatorUserId: currentUser.id,
         name: n,
         description: description.trim() || undefined,
         category,

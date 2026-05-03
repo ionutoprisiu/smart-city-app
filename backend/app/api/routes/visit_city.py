@@ -8,6 +8,13 @@ from app.services import visit_city_service
 router = APIRouter(prefix="/visit-city", tags=["visit-city"])
 
 
+def _runtime_status_code(exc: RuntimeError) -> int:
+    msg = str(exc)
+    if "ACO" in msg or "not available" in msg:
+        return 503
+    return 502
+
+
 @router.get("/attractions")
 def get_attractions(
     category: str | None = None,
@@ -42,9 +49,7 @@ def optimize_route(
             body.routingProfile,
         )
         return {"data": data}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except RuntimeError as e:
-        msg = str(e)
-        code = 503 if "ACO" in msg or "not available" in msg else 502
-        raise HTTPException(status_code=code, detail=msg) from e
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=_runtime_status_code(exc), detail=str(exc)) from exc

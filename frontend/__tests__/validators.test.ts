@@ -1,4 +1,4 @@
-import { Validators } from '../src/shared/utils/validators';
+import { Validators } from '@shared/utils/validators';
 
 describe('Validators', () => {
   test('email validator accepts a valid email', () => {

@@ -34,24 +34,12 @@ async def optimize(request: OptimizeRequest) -> OptimizeResponse:
         len(attractions), has_start, request.useOsrm, profile,
     )
 
-    if len(attractions) == 1 and has_start:
-        return await _single_destination(attractions[0], request, profile)
-
     points = _build_points(request, attractions, has_start)
     distance_matrix, duration_matrix, used_osrm = await _build_matrices(points, profile, request.useOsrm)
 
-    cost_matrix = duration_matrix if (used_osrm and duration_matrix is not None) else distance_matrix
-    best_route, _ = ACOOptimizer(cost_matrix).optimize()
+    best_route = _build_route(points, distance_matrix, duration_matrix, used_osrm)
     best_distance_km = calculate_route_distance(best_route, distance_matrix)
-
-    ordered = [points[i] for i in best_route]
-    route_geometry: list[dict] = []
-    route_segments: list[list[dict]] = []
-    leg_durations_sec: list[float] = []
-    if used_osrm:
-        route_segments, leg_durations_sec = await osrm_client.fetch_route_segments(ordered, profile)
-        for segment in route_segments:
-            _append_segment_merged(route_geometry, segment)
+    route_geometry, route_segments, leg_durations_sec = await _route_details(points, best_route, profile, used_osrm)
 
     response = _build_response(
         points,
@@ -102,58 +90,38 @@ async def _build_matrices(
     return calculate_distance_matrix(points), None, False
 
 
-async def _single_destination(
-    attraction: dict, request: OptimizeRequest, profile: str
-) -> OptimizeResponse:
-    start = {
-        "id": 0,
-        "latitude": request.startLatitude,
-        "longitude": request.startLongitude,
-    }
-    points = [start, attraction]
-    distance_matrix, duration_matrix, used_osrm = await _build_matrices(points, profile, request.useOsrm)
-    distance = distance_matrix[0][1]
+def _build_route(
+    points: list[dict],
+    distance_matrix: list[list[float]],
+    duration_matrix: list[list[float]] | None,
+    used_osrm: bool,
+) -> list[int]:
+    """Return route indices, preserving previous single-destination behavior."""
+    if len(points) == 2 and points[0]["id"] == 0:
+        return [0, 1]
 
+    cost_matrix = duration_matrix if (used_osrm and duration_matrix is not None) else distance_matrix
+    best_route, _ = ACOOptimizer(cost_matrix).optimize()
+    return best_route
+
+
+async def _route_details(
+    points: list[dict],
+    best_route: list[int],
+    profile: str,
+    used_osrm: bool,
+) -> tuple[list[dict], list[list[dict]], list[float]]:
     route_geometry: list[dict] = []
     route_segments: list[list[dict]] = []
     leg_durations_sec: list[float] = []
-    if used_osrm:
-        route_segments, leg_durations_sec = await osrm_client.fetch_route_segments(points, profile)
-        for segment in route_segments:
-            _append_segment_merged(route_geometry, segment)
+    if not used_osrm:
+        return route_geometry, route_segments, leg_durations_sec
 
-    travel_min = _travel_time_minutes([0, 1], distance, duration_matrix, profile, leg_durations_sec)
-
-    steps = [
-        RouteStepResponse(
-            order=1, attractionId=0, attractionName="Your Location",
-            latitude=start["latitude"], longitude=start["longitude"],
-            distanceToNext=round(distance, 3),
-        ),
-        RouteStepResponse(
-            order=2, attractionId=attraction["id"],
-            attractionName=f"Attraction {attraction['id']}",
-            latitude=attraction["latitude"], longitude=attraction["longitude"],
-            distanceToNext=None,
-        ),
-    ]
-    path = [
-        {"latitude": start["latitude"], "longitude": start["longitude"]},
-        {"latitude": attraction["latitude"], "longitude": attraction["longitude"]},
-    ]
-
-    return OptimizeResponse(
-        steps=steps,
-        totalDistance=round(distance, 3),
-        totalTime=travel_min,
-        travelTimeMinutes=travel_min,
-        visitTimeMinutes=0,
-        path=path,
-        routeGeometry=route_geometry if route_geometry else path,
-        routeSegments=route_segments,
-        usedOsrm=used_osrm,
-        routingProfile=profile,
-    )
+    ordered = [points[i] for i in best_route]
+    route_segments, leg_durations_sec = await osrm_client.fetch_route_segments(ordered, profile)
+    for segment in route_segments:
+        _append_segment_merged(route_geometry, segment)
+    return route_geometry, route_segments, leg_durations_sec
 
 
 def _append_segment_merged(route_geometry: list[dict], segment: list[dict]) -> None:
@@ -227,30 +195,25 @@ def _travel_time_minutes(
     leg_durations_sec: list[float] | None,
 ) -> int:
     """Pick the most credible travel-time estimate available."""
+    missing_cap = MISSING_EDGE_SEC * max(2, len(route))
+
     table_sec = 0.0
     if duration_matrix is not None and len(route) >= 2:
         for i in range(len(route) - 1):
             a, b = route[i], route[i + 1]
             table_sec += float(duration_matrix[a][b])
 
-    leg_sec = 0.0
-    if leg_durations_sec:
-        leg_sec = sum(float(d) for d in leg_durations_sec if d and d > 0)
+    leg_sec = (
+        sum(float(d) for d in leg_durations_sec if d and d > 0) if leg_durations_sec else 0.0
+    )
 
-    # Prefer the per-edge OSRM table when the per-leg /route durations look
-    # implausibly small (e.g. snapping artifacts).
-    if (
-        table_sec > 0
-        and table_sec < (MISSING_EDGE_SEC * max(2, len(route)))
-        and leg_sec > 0
-        and leg_sec < table_sec * 0.45
-    ):
+    table_credible = 0 < table_sec < missing_cap
+    # Prefer the OSRM table when per-leg /route durations look implausibly small (snapping artifacts).
+    if table_credible and leg_sec > 0 and leg_sec < table_sec * 0.45:
         return max(1, int(round(table_sec / 60.0)))
-
     if leg_sec > 0:
         return max(1, int(round(leg_sec / 60.0)))
-
-    if table_sec > 0 and table_sec < (MISSING_EDGE_SEC * max(2, len(route))):
+    if table_credible:
         return max(1, int(round(table_sec / 60.0)))
 
     speed = settings.walking_speed_kmh if profile == "foot" else settings.driving_speed_kmh

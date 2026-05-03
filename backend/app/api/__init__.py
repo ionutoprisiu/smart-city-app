@@ -1,1 +1,1 @@
-"""HTTP layer: route modules."""
+"""HTTP layer: routers, dependencies, and exception wiring."""

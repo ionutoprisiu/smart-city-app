@@ -3,12 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class BecomeOrganizerRequest(BaseModel):
-    userId: int
-
-
 class EventCreateRequest(BaseModel):
-    creatorUserId: int
     title: str = Field(min_length=3, max_length=200)
     description: str | None = None
     category: str = "GENERAL"
@@ -37,7 +32,6 @@ class EventResponse(BaseModel):
 
 
 class ClubCreateRequest(BaseModel):
-    creatorUserId: int
     name: str = Field(min_length=3, max_length=120)
     description: str | None = None
     category: str = "OTHER"
@@ -61,16 +55,7 @@ class ClubResponse(BaseModel):
     membershipStatus: str | None = None
 
 
-class ClubJoinRequest(BaseModel):
-    userId: int
-
-
-class UserActorRequest(BaseModel):
-    userId: int
-
-
 class AnnouncementCreateRequest(BaseModel):
-    userId: int
     title: str = Field(min_length=2, max_length=200)
     body: str = Field(min_length=1, max_length=8000)
 
@@ -83,3 +68,26 @@ class AnnouncementResponse(BaseModel):
     clubId: int | None = None
     createdBy: int
     createdAt: datetime
+
+
+class ChatMessageCreateRequest(BaseModel):
+    role: str = Field(pattern="^(USER|ORGANIZER)$")
+    body: str = Field(min_length=1, max_length=8000)
+    inReplyToMessageId: int | None = None
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    eventId: int | None = None
+    clubId: int | None = None
+    senderUserId: int
+    role: str
+    body: str
+    inReplyToMessageId: int | None = None
+    isAutoReply: bool
+    createdAt: datetime
+
+
+class ChatPostResponse(BaseModel):
+    message: ChatMessageResponse
+    autoReply: ChatMessageResponse | None = None

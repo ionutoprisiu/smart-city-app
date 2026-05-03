@@ -11,13 +11,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { ActivitiesStackParamList } from '../../../app/navigation/types';
-import { ErrorMessage } from '../../../shared/components/ErrorMessage';
-import { StorageService } from '../../../shared/storage/storageService';
-import { useTheme } from '../../../theme';
-import { useAuthStore } from '../../auth/store/authStore';
+import { ActivitiesStackParamList } from '@app/navigation/types';
+import { extractErrorMessage } from '@shared/api/errors';
+import { ErrorMessage } from '@shared/components/ErrorMessage';
+import { StorageService } from '@shared/storage/storageService';
+import { useTheme } from '@theme';
+import { useAuthStore } from '@features/auth/store/authStore';
 import { ActivitiesApi } from '../api/activitiesApi';
-import { AnnouncementsSection } from '../components/AnnouncementsSection';
+import { ActivitiesClubCard } from '../components/ActivitiesClubCard';
+import type { ActivitiesCardThemed } from '../activitiesCardThemed';
+import { ActivitiesEventCard } from '../components/ActivitiesEventCard';
 import { ACTIVITIES_CITY } from '../constants';
 import { ActivityEvent, Club } from '../types';
 
@@ -25,20 +28,6 @@ type Segment = 'events' | 'clubs';
 type ActivityScope = 'all' | 'mine';
 
 type Nav = NativeStackNavigationProp<ActivitiesStackParamList, 'ActivitiesHome'>;
-
-const fmtDate = (iso: string) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-};
-
-const statusLabel = (status: string) => {
-  const s = status.toUpperCase();
-  if (s === 'PUBLISHED') return 'Live';
-  if (s === 'CANCELLED') return 'Cancelled';
-  if (s === 'DELETED') return 'Removed';
-  return status;
-};
 
 export const ActivitiesHomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -54,6 +43,11 @@ export const ActivitiesHomeScreen: React.FC = () => {
 
   const isOrganizer = currentUser?.role === 'organizer' || currentUser?.role === 'admin';
   const canBecomeOrganizer = !isOrganizer && currentUser?.isVerified === true;
+
+  const setActionError = useCallback((error: unknown, fallback: string) => {
+    const message = extractErrorMessage(error);
+    setErrorMessage(message || fallback);
+  }, []);
 
   const themedStyles = useMemo(
     () => ({
@@ -87,6 +81,21 @@ export const ActivitiesHomeScreen: React.FC = () => {
     [theme],
   );
 
+  const cardThemed = useMemo((): ActivitiesCardThemed => {
+    return {
+      cardBg: themedStyles.cardBg,
+      cardTitle: themedStyles.cardTitle,
+      cardSub: themedStyles.cardSub,
+      tagBg: themedStyles.tagBg,
+      tagText: themedStyles.tagText,
+      ctaBg: themedStyles.ctaBg,
+      ctaText: themedStyles.ctaText,
+      ctaDisabledBg: themedStyles.ctaDisabledBg,
+      ctaDisabledText: themedStyles.ctaDisabledText,
+      mutedIcon: themedStyles.mutedIcon,
+    };
+  }, [themedStyles]);
+
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -94,21 +103,21 @@ export const ActivitiesHomeScreen: React.FC = () => {
       const useMine = scope === 'mine' && currentUser != null;
       const [nextEvents, nextClubs] = await Promise.all(
         useMine
-          ? [ActivitiesApi.listMyEvents(currentUser.id), ActivitiesApi.listMyClubs(currentUser.id)]
-          : [ActivitiesApi.listEvents(), ActivitiesApi.listClubs(currentUser?.id)],
+          ? [ActivitiesApi.listMyEvents(), ActivitiesApi.listMyClubs()]
+          : [ActivitiesApi.listEvents(), ActivitiesApi.listClubs()],
       );
       setEvents(nextEvents);
       setClubs(nextClubs);
     } catch (e: unknown) {
-      setErrorMessage(String((e as { message?: string })?.message ?? e ?? 'Failed to load activities'));
+      setActionError(e, 'Failed to load activities');
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, scope]);
+  }, [currentUser, scope, setActionError]);
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
+      refresh().catch(() => {});
     }, [refresh]),
   );
 
@@ -117,7 +126,7 @@ export const ActivitiesHomeScreen: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const auth = await ActivitiesApi.becomeOrganizer(currentUser.id);
+      const auth = await ActivitiesApi.becomeOrganizer();
       setCurrentUser({
         currentUser: {
           ...currentUser,
@@ -125,8 +134,9 @@ export const ActivitiesHomeScreen: React.FC = () => {
         },
       });
       if (auth.role) await StorageService.saveUserRole(auth.role);
+      if (auth.accessToken) await StorageService.saveUserToken(auth.accessToken);
     } catch (e: unknown) {
-      setErrorMessage(String((e as { message?: string })?.message ?? e ?? 'Could not enable organizer role'));
+      setActionError(e, 'Could not enable organizer role');
     } finally {
       setIsLoading(false);
     }
@@ -137,10 +147,10 @@ export const ActivitiesHomeScreen: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const updated = await ActivitiesApi.joinClub(clubId, currentUser.id);
+      const updated = await ActivitiesApi.joinClub(clubId);
       setClubs((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     } catch (e: unknown) {
-      setErrorMessage(String((e as { message?: string })?.message ?? e ?? 'Could not join club'));
+      setActionError(e, 'Could not join club');
     } finally {
       setIsLoading(false);
     }
@@ -151,14 +161,14 @@ export const ActivitiesHomeScreen: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const updated = await ActivitiesApi.leaveClub(clubId, currentUser.id);
+      const updated = await ActivitiesApi.leaveClub(clubId);
       if (scope === 'mine') {
         setClubs((prev) => prev.filter((c) => c.id !== clubId));
       } else {
         setClubs((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       }
     } catch (e: unknown) {
-      setErrorMessage(String((e as { message?: string })?.message ?? e ?? 'Could not leave club'));
+      setActionError(e, 'Could not leave club');
     } finally {
       setIsLoading(false);
     }
@@ -169,10 +179,10 @@ export const ActivitiesHomeScreen: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const updated = await ActivitiesApi.cancelEvent(eventId, currentUser.id);
+      const updated = await ActivitiesApi.cancelEvent(eventId);
       setEvents((prev) => prev.map((ev) => (ev.id === updated.id ? updated : ev)));
     } catch (e: unknown) {
-      setErrorMessage(String((e as { message?: string })?.message ?? e ?? 'Could not cancel event'));
+      setActionError(e, 'Could not cancel event');
     } finally {
       setIsLoading(false);
     }
@@ -335,135 +345,27 @@ export const ActivitiesHomeScreen: React.FC = () => {
         {isLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
 
         {segment === 'events'
-          ? events.map((event) => {
-              const st = event.status.toUpperCase();
-              const statusIsLive = st === 'PUBLISHED';
-              const statusIsCancelled = st === 'CANCELLED';
-              const canPostEventAnnouncement =
-                !!currentUser &&
-                (currentUser.role === 'admin' ||
-                  (event.createdBy === currentUser.id && statusIsLive));
-              return (
-                <View key={`event-${event.id}`} style={[styles.card, themedStyles.cardBg]}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={[theme.typography.titleSmall, themedStyles.cardTitle, styles.cardTitleFlex]}>
-                      {event.title}
-                    </Text>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        {
-                          backgroundColor: statusIsCancelled
-                            ? theme.colors.errorContainer + 'AA'
-                            : statusIsLive
-                              ? theme.colors.primaryContainer + 'AA'
-                              : theme.colors.surfaceContainerHigh,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          theme.typography.labelSmall,
-                          {
-                            color: statusIsCancelled
-                              ? theme.colors.error
-                              : statusIsLive
-                                ? theme.colors.onPrimaryContainer
-                                : theme.colors.onSurfaceVariant,
-                          },
-                        ]}
-                      >
-                        {statusLabel(event.status)}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[theme.typography.bodySmall, themedStyles.cardSub]}>
-                    {fmtDate(event.startsAt)} • {event.city}
-                  </Text>
-                  {event.locationName ? (
-                    <View style={styles.locRow}>
-                      <Icon name="place" size={14} color={themedStyles.mutedIcon} style={styles.locIcon} />
-                      <Text style={[theme.typography.bodySmall, themedStyles.cardSub, styles.locText]}>
-                        {event.locationName}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {event.description ? (
-                    <Text style={[theme.typography.bodyMedium, themedStyles.cardSub, styles.cardDescription]}>
-                      {event.description}
-                    </Text>
-                  ) : null}
-                  <View style={[styles.tag, themedStyles.tagBg]}>
-                    <Text style={[theme.typography.labelSmall, themedStyles.tagText]}>{event.category}</Text>
-                  </View>
-                  <AnnouncementsSection
-                    kind="event"
-                    resourceId={event.id}
-                    currentUserId={currentUser?.id}
-                    canPost={canPostEventAnnouncement}
-                  />
-                  {currentUser && event.createdBy === currentUser.id && event.status === 'PUBLISHED' ? (
-                    <Pressable
-                      onPress={() => onCancelEvent(event.id)}
-                      disabled={isLoading}
-                      style={[styles.joinBtn, themedStyles.ctaDisabledBg]}
-                    >
-                      <Text style={[theme.typography.labelMedium, themedStyles.ctaDisabledText]}>Cancel event</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              );
-            })
-          : clubs.map((club) => {
-              const clubCanViewAnnouncements =
-                currentUser?.role === 'admin' || club.membershipStatus === 'APPROVED';
-              const canPostClubAnnouncement = !!currentUser && club.isClubAdmin;
-              return (
-              <View key={`club-${club.id}`} style={[styles.card, themedStyles.cardBg]}>
-                <Text style={[theme.typography.titleSmall, themedStyles.cardTitle]}>{club.name}</Text>
-                <Text style={[theme.typography.bodySmall, themedStyles.cardSub]}>
-                  {club.membersCount} members • {club.city}
-                </Text>
-                <View style={styles.clubMetaRow}>
-                  <View style={[styles.tag, themedStyles.tagBg]}>
-                    <Text style={[theme.typography.labelSmall, themedStyles.tagText]}>{club.category}</Text>
-                  </View>
-                  <View style={[styles.tag, { backgroundColor: theme.colors.surfaceContainerHigh }]}>
-                    <Text style={[theme.typography.labelSmall, { color: theme.colors.onSurfaceVariant }]}>
-                      {club.visibility === 'APPROVAL_REQUIRED' ? 'Approval' : 'Open'}
-                    </Text>
-                  </View>
-                </View>
-                {club.description ? (
-                  <Text style={[theme.typography.bodyMedium, themedStyles.cardSub, styles.cardDescription]}>
-                    {club.description}
-                  </Text>
-                ) : null}
-                <AnnouncementsSection
-                  kind="club"
-                  resourceId={club.id}
-                  currentUserId={currentUser?.id}
-                  canPost={canPostClubAnnouncement}
-                  clubCanView={clubCanViewAnnouncements}
-                  clubMembershipStatus={club.membershipStatus}
-                />
-                <Pressable
-                  onPress={() => (club.joined ? onLeaveClub(club.id) : onJoinClub(club.id))}
-                  disabled={isLoading || !currentUser}
-                  style={[styles.joinBtn, club.joined ? themedStyles.ctaDisabledBg : themedStyles.ctaBg]}
-                >
-                  <Text
-                    style={[
-                      theme.typography.labelMedium,
-                      club.joined ? themedStyles.ctaDisabledText : themedStyles.ctaText,
-                    ]}
-                  >
-                    {club.joined ? 'Leave club' : 'Join club'}
-                  </Text>
-                </Pressable>
-              </View>
-            );
-            })}
+          ? events.map((event) => (
+              <ActivitiesEventCard
+                key={`event-${event.id}`}
+                event={event}
+                currentUser={currentUser}
+                isLoading={isLoading}
+                themed={cardThemed}
+                onCancelEvent={onCancelEvent}
+              />
+            ))
+          : clubs.map((club) => (
+              <ActivitiesClubCard
+                key={`club-${club.id}`}
+                club={club}
+                currentUser={currentUser}
+                isLoading={isLoading}
+                themed={cardThemed}
+                onJoinClub={onJoinClub}
+                onLeaveClub={onLeaveClub}
+              />
+            ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -522,30 +424,4 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   loader: { marginTop: 18 },
-  card: { marginTop: 12, borderWidth: 1, padding: 12 },
-  cardHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  cardTitleFlex: { flex: 1 },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  locRow: { marginTop: 4, flexDirection: 'row', alignItems: 'center' },
-  locIcon: { marginRight: 4 },
-  locText: { flex: 1 },
-  cardDescription: { marginTop: 6 },
-  clubMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
-  tag: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  joinBtn: {
-    marginTop: 10,
-    borderRadius: 10,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
 });

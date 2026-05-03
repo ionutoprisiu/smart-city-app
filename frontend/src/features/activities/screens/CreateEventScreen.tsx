@@ -1,14 +1,14 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import MapView, { Marker, MapPressEvent, MarkerDragStartEndEvent } from 'react-native-maps';
-import { ActivitiesStackParamList } from '../../../app/navigation/types';
-import { AppButton } from '../../../shared/components/AppButton';
-import { ErrorMessage } from '../../../shared/components/ErrorMessage';
-import { AddressService } from '../../../shared/services/addressService';
-import { useTheme } from '../../../theme';
-import { useAuthStore } from '../../auth/store/authStore';
+import { ActivitiesStackParamList } from '@app/navigation/types';
+import { AppButton } from '@shared/components/AppButton';
+import { ErrorMessage } from '@shared/components/ErrorMessage';
+import { AddressService } from '@shared/services/addressService';
+import { useTheme } from '@theme';
+import { useAuthStore } from '@features/auth/store/authStore';
 import { ActivitiesApi } from '../api/activitiesApi';
 import { ACTIVITIES_CITY, ACTIVITIES_MAP_CENTER, ACTIVITIES_MAP_DELTA } from '../constants';
 
@@ -80,11 +80,11 @@ export const CreateEventScreen: React.FC = () => {
     [theme],
   );
 
-  const scheduleReverseGeocode = (lat: number, lng: number) => {
+  const scheduleReverseGeocode = useCallback((lat: number, lng: number) => {
     if (geocodeTimerRef.current != null) clearTimeout(geocodeTimerRef.current);
     setIsGeocoding(true);
     geocodeTimerRef.current = setTimeout(() => {
-      void (async () => {
+      const runReverseGeocode = async () => {
         try {
           const line = await AddressService.streetFromCoordinates(lat, lng, ACTIVITIES_CITY);
           if (line.trim().length > 0 && line !== 'Street unavailable') {
@@ -93,17 +93,19 @@ export const CreateEventScreen: React.FC = () => {
         } finally {
           setIsGeocoding(false);
         }
-      })();
+      };
+      runReverseGeocode().catch(() => {
+        setIsGeocoding(false);
+      });
     }, 650);
-  };
+  }, []);
 
   useEffect(() => {
     scheduleReverseGeocode(pin.latitude, pin.longitude);
     return () => {
       if (geocodeTimerRef.current != null) clearTimeout(geocodeTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pin.latitude, pin.longitude, scheduleReverseGeocode]);
 
   const onMapPress = (e: MapPressEvent) => {
     const c = e.nativeEvent.coordinate;
@@ -144,7 +146,6 @@ export const CreateEventScreen: React.FC = () => {
     setIsSubmitting(true);
     try {
       await ActivitiesApi.createEvent({
-        creatorUserId: currentUser.id,
         title: t,
         description: description.trim() || undefined,
         category,

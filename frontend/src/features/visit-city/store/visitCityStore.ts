@@ -5,8 +5,8 @@ import {
   request as requestPermission,
 } from 'react-native-permissions';
 import { create } from 'zustand';
-import { extractErrorMessage } from '../../../shared/api/errors';
-import { Logger } from '../../../shared/utils/logger';
+import { extractErrorMessage } from '@shared/api/errors';
+import { Logger } from '@shared/utils/logger';
 import { VisitCityApi } from '../api/visitCityApi';
 import {
   Attraction,

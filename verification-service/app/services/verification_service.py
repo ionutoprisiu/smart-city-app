@@ -1,13 +1,10 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
-
-import cv2
-import numpy as np
-import pytesseract
-from insightface.app import FaceAnalysis
-from PIL import Image, ImageOps
+from typing import Any
 
 from app.common.exceptions import VerificationInputError
 from app.core.config import settings
@@ -21,7 +18,11 @@ class VerificationResult:
     ocr_data: dict | None
 
 
-def _decode_image(data: bytes) -> np.ndarray:
+def _decode_image(data: bytes) -> Any:
+    import cv2
+    import numpy as np
+    from PIL import Image, ImageOps
+
     try:
         pil_image = Image.open(BytesIO(data))
         pil_image = ImageOps.exif_transpose(pil_image).convert("RGB")
@@ -36,7 +37,9 @@ def _decode_image(data: bytes) -> np.ndarray:
 
 
 @lru_cache(maxsize=1)
-def _face_app() -> FaceAnalysis:
+def _face_app() -> Any:
+    from insightface.app import FaceAnalysis
+
     app = FaceAnalysis(name=settings.insightface_model_name, providers=["CPUExecutionProvider"])
     app.prepare(
         ctx_id=0,
@@ -46,7 +49,9 @@ def _face_app() -> FaceAnalysis:
     return app
 
 
-def _enhance_for_detection(image: np.ndarray) -> np.ndarray:
+def _enhance_for_detection(image: Any) -> Any:
+    import cv2
+
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l_channel, a_channel, b_channel = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -55,7 +60,9 @@ def _enhance_for_detection(image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
 
 
-def _largest_face_embedding(faces: list) -> np.ndarray:
+def _largest_face_embedding(faces: list[Any]) -> Any:
+    import numpy as np
+
     best_face = max(faces, key=lambda f: float(f.bbox[2] - f.bbox[0]) * float(f.bbox[3] - f.bbox[1]))
     embedding = np.asarray(best_face.embedding, dtype=np.float32)
     norm = np.linalg.norm(embedding)
@@ -64,9 +71,11 @@ def _largest_face_embedding(faces: list) -> np.ndarray:
     return embedding / norm
 
 
-def _extract_face_embedding(image: np.ndarray, *, id_card_mode: bool = False, source_label: str = "image") -> np.ndarray:
+def _extract_face_embedding(image: Any, *, id_card_mode: bool = False, source_label: str = "image") -> Any:
+    import cv2
+
     app = _face_app()
-    candidates: list[np.ndarray] = []
+    candidates: list[Any] = []
 
     candidates.append(image)
     enhanced = _enhance_for_detection(image)
@@ -104,7 +113,10 @@ def _cosine_to_score(cosine_similarity: float) -> float:
     return max(0.0, min(1.0, (cosine_similarity + 1.0) / 2.0))
 
 
-def _extract_ocr_data(id_card_image: np.ndarray) -> dict | None:
+def _extract_ocr_data(id_card_image: Any) -> dict | None:
+    import cv2
+    import pytesseract
+
     gray = cv2.cvtColor(id_card_image, cv2.COLOR_BGR2GRAY)
     gray = cv2.medianBlur(gray, 3)
     text = pytesseract.image_to_string(gray)
@@ -122,6 +134,8 @@ def _extract_ocr_data(id_card_image: np.ndarray) -> dict | None:
 
 
 def verify_identity(id_card_bytes: bytes, selfie_bytes: bytes) -> VerificationResult:
+    import numpy as np
+
     id_card_image = _decode_image(id_card_bytes)
     selfie_image = _decode_image(selfie_bytes)
 
@@ -151,4 +165,3 @@ def verify_identity(id_card_bytes: bytes, selfie_bytes: bytes) -> VerificationRe
 
 def warm_up_models() -> None:
     _face_app()
-

@@ -1,4 +1,4 @@
-import { useVisitCityStore } from '../src/features/visit-city/store/visitCityStore';
+import { useVisitCityStore } from '@features/visit-city/store/visitCityStore';
 
 jest.mock('@react-native-community/geolocation', () => ({
   getCurrentPosition: jest.fn(),

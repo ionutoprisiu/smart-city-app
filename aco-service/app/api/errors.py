@@ -1,4 +1,4 @@
-"""Global exception handlers attached to the FastAPI app."""
+"""Global FastAPI exception handlers (maps domain errors to JSON responses)."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
-import { useAuthStore } from '../src/features/auth/store/authStore';
-import { AuthApi } from '../src/features/auth/api/authApi';
-import { StorageService } from '../src/shared/storage/storageService';
+import { useAuthStore } from '@features/auth/store/authStore';
+import { AuthApi } from '@features/auth/api/authApi';
+import { StorageService } from '@shared/storage/storageService';
 
 jest.mock('../src/features/auth/api/authApi', () => ({
   AuthApi: {
@@ -15,11 +15,16 @@ jest.mock('../src/shared/storage/storageService', () => ({
     getUserId: jest.fn(),
     getUserEmail: jest.fn(),
     getUserName: jest.fn(),
+    getUserProfilePhotoUri: jest.fn(() => null),
     saveUserId: jest.fn(),
     saveUserEmail: jest.fn(),
     saveUserName: jest.fn(),
+    saveUserRole: jest.fn(),
+    saveUserIsVerified: jest.fn(),
+    saveUserVerificationStatus: jest.fn(),
     clearAll: jest.fn(),
     getUserToken: jest.fn(),
+    saveUserToken: jest.fn(),
   },
 }));
 
@@ -53,6 +58,7 @@ describe('authStore', () => {
       lastName: 'Popescu',
       isVerified: false,
       verificationStatus: 'notSubmitted',
+      accessToken: 'test.jwt.token',
       message: 'ok',
     });
 
@@ -64,6 +70,7 @@ describe('authStore', () => {
     expect(mockedStorage.saveUserId).toHaveBeenCalledWith(1);
     expect(mockedStorage.saveUserEmail).toHaveBeenCalledWith('user@example.com');
     expect(mockedStorage.saveUserName).toHaveBeenCalledWith('Ionut', 'Popescu');
+    expect(mockedStorage.saveUserToken).toHaveBeenCalledWith('test.jwt.token');
     expect(useAuthStore.getState().currentUser?.email).toBe('user@example.com');
     expect(useAuthStore.getState().isLoading).toBe(false);
     expect(useAuthStore.getState().errorMessage).toBeNull();

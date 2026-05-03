@@ -25,6 +25,8 @@ EARLY_STOPPING_THRESHOLD = 50
 
 
 class ACOOptimizer:
+    """Ant System–style ACO: stochastic construction + pheromone deposit/evaporation on a cost matrix."""
+
     def __init__(self, cost_matrix: list[list[float]]):
         if not cost_matrix:
             raise ValueError("Cost matrix cannot be empty")
@@ -78,17 +80,13 @@ class ACOOptimizer:
         if not unvisited:
             return []
 
-        numerators: list[float] = []
-        total = 0.0
-        for nxt in unvisited:
-            pheromone = self.pheromones[current][nxt]
-            visibility = self._visibility(current, nxt)
-            value = (pheromone**ALPHA) * (visibility**BETA)
-            numerators.append(value)
-            total += value
-
+        numerators = [
+            (self.pheromones[current][nxt] ** ALPHA) * (self._visibility(current, nxt) ** BETA)
+            for nxt in unvisited
+        ]
+        total = sum(numerators)
         if total > 0:
-            return [num / total for num in numerators]
+            return [n / total for n in numerators]
         return [1.0 / len(unvisited)] * len(unvisited)
 
     def _construct_route(self) -> list[int]:

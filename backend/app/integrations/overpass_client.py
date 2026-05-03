@@ -1,25 +1,18 @@
-"""Pure HTTP client for the Overpass API (OpenStreetMap).
-
-Returns raw Overpass elements; parsing/mapping to domain models lives in
-the service layer (`attraction_discovery_service`).
-"""
+"""HTTP client for the Overpass API (OpenStreetMap query → JSON)."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import httpx
 
-log = logging.getLogger(__name__)
-
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 USER_AGENT = "SmartCityApp/1.0"
+DEFAULT_TIMEOUT = httpx.Timeout(65.0, connect=10.0)
 
 
 def execute_query(query: str) -> dict[str, Any]:
-    """Send a raw Overpass QL query and return the parsed JSON response."""
-    with httpx.Client(timeout=httpx.Timeout(65.0, connect=10.0)) as client:
+    with httpx.Client(timeout=DEFAULT_TIMEOUT) as client:
         response = client.post(
             OVERPASS_URL,
             data={"data": query},

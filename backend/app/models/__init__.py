@@ -4,12 +4,14 @@ from app.models.activity_event import ActivityEvent
 from app.models.club import Club
 from app.models.club_membership import ClubMembership
 from app.models.activity_announcement import ActivityAnnouncement
+from app.models.activity_chat_message import ActivityChatMessage
 
 __all__ = [
     "User",
     "TouristAttraction",
     "ActivityEvent",
     "ActivityAnnouncement",
+    "ActivityChatMessage",
     "Club",
     "ClubMembership",
 ]

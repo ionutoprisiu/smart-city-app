@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useTheme } from '../../theme';
+import { useTheme } from '@theme';
 
 type Variant = 'filled' | 'outlined' | 'text' | 'tonal' | 'destructive';
 

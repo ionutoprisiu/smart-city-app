@@ -6,10 +6,10 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect } from 'react';
-import { SplashScreen } from '../../features/auth/screens/SplashScreen';
-import { useAuthStore } from '../../features/auth/store/authStore';
-import { VerificationScreen } from '../../features/verification/screens/VerificationScreen';
-import { useTheme } from '../../theme';
+import { SplashScreen } from '@features/auth/screens/SplashScreen';
+import { useAuthStore } from '@features/auth/store/authStore';
+import { VerificationScreen } from '@features/verification/screens/VerificationScreen';
+import { useTheme } from '@theme';
 import { AuthStack } from './AuthStack';
 import { MainTabs } from './MainTabs';
 import { AppRootStackParamList } from './types';

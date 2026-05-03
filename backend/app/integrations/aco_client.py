@@ -1,4 +1,4 @@
-"""HTTP client for the ACO (Ant Colony Optimization) microservice."""
+"""HTTP client for the ACO route optimization microservice."""
 
 from __future__ import annotations
 
@@ -11,19 +11,18 @@ from app.core.config import settings
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 120.0
+HTTP_TIMEOUT_SECONDS = 120.0
 
 
 class AcoServiceError(RuntimeError):
-    """Raised when the ACO service is unavailable or returns an error."""
+    """Raised when the ACO service is unavailable or returns an HTTP error."""
 
 
-def optimize(payload: dict[str, Any], *, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
-    """POST `/optimize` against the ACO service and return the parsed response."""
+def optimize(payload: dict[str, Any]) -> dict[str, Any]:
     url = f"{settings.aco_service_url.rstrip('/')}/optimize"
     log.info("Calling ACO /optimize")
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS) as client:
             response = client.post(url, json=payload)
             response.raise_for_status()
             return response.json()

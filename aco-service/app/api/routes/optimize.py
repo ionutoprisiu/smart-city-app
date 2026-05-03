@@ -14,7 +14,15 @@ log = logging.getLogger(__name__)
 router = APIRouter(tags=["optimize"])
 
 
-@router.post("/optimize", response_model=OptimizeResponse)
+@router.post(
+    "/optimize",
+    response_model=OptimizeResponse,
+    summary="Optimize visit order",
+    description=(
+        "Builds a cost matrix (OSRM or Haversine), runs ACO anchored at the optional start point, "
+        "and returns ordered steps with distances and optional per-leg geometry."
+    ),
+)
 async def optimize_route(request: OptimizeRequest) -> OptimizeResponse:
     try:
         return await route_service.optimize(request)

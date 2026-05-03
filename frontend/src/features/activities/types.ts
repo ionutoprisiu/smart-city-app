@@ -41,6 +41,23 @@ export type ActivityAnnouncement = {
   createdAt: string;
 };
 
+export type ActivityChatMessage = {
+  id: number;
+  eventId: number | null;
+  clubId: number | null;
+  senderUserId: number;
+  role: 'USER' | 'ORGANIZER';
+  body: string;
+  inReplyToMessageId: number | null;
+  isAutoReply: boolean;
+  createdAt: string;
+};
+
+export type ActivityChatPostResult = {
+  message: ActivityChatMessage;
+  autoReply: ActivityChatMessage | null;
+};
+
 export const eventFromJson = (json: any): ActivityEvent => ({
   id: Number(json?.id ?? 0),
   title: String(json?.title ?? ''),
@@ -84,4 +101,21 @@ export const announcementFromJson = (json: any): ActivityAnnouncement => ({
   clubId: json?.clubId != null ? Number(json.clubId) : null,
   createdBy: Number(json?.createdBy ?? 0),
   createdAt: String(json?.createdAt ?? ''),
+});
+
+export const chatMessageFromJson = (json: any): ActivityChatMessage => ({
+  id: Number(json?.id ?? 0),
+  eventId: json?.eventId != null ? Number(json.eventId) : null,
+  clubId: json?.clubId != null ? Number(json.clubId) : null,
+  senderUserId: Number(json?.senderUserId ?? 0),
+  role: String(json?.role ?? 'USER').toUpperCase() === 'ORGANIZER' ? 'ORGANIZER' : 'USER',
+  body: String(json?.body ?? ''),
+  inReplyToMessageId: json?.inReplyToMessageId != null ? Number(json.inReplyToMessageId) : null,
+  isAutoReply: Boolean(json?.isAutoReply),
+  createdAt: String(json?.createdAt ?? ''),
+});
+
+export const chatPostResultFromJson = (json: any): ActivityChatPostResult => ({
+  message: chatMessageFromJson(json?.message ?? {}),
+  autoReply: json?.autoReply ? chatMessageFromJson(json.autoReply) : null,
 });

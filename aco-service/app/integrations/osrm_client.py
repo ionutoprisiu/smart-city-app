@@ -21,7 +21,6 @@ from app.core.config import settings
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 25.0
 SUPPORTED_PROFILES = ("driving", "foot")
 
 
@@ -31,6 +30,31 @@ def normalize_profile(profile: str) -> str:
         log.warning("Unknown OSRM profile '%s', using driving", profile)
         return "driving"
     return p
+
+
+def _table_matrices_from_json(points: list[dict], data: dict) -> tuple[list[list[float]], list[list[float]]] | None:
+    """Parse OSRM `/table` JSON into km + second matrices, or ``None`` if response is not OK."""
+    if data.get("code") != "Ok":
+        log.warning("OSRM table failed: %s, falling back to Haversine", data.get("code"))
+        return None
+
+    raw_d = data["distances"]
+    raw_t = data.get("durations")
+    n = len(points)
+    dist_m = [[0.0] * n for _ in range(n)]
+    dur_s = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            dd = raw_d[i][j]
+            dist_m[i][j] = MISSING_EDGE_KM if dd is None else float(dd) / 1000.0
+            if raw_t is not None:
+                tt = raw_t[i][j]
+                dur_s[i][j] = MISSING_EDGE_SEC if tt is None else float(tt)
+            else:
+                dur_s[i][j] = MISSING_EDGE_SEC
+    return dist_m, dur_s
 
 
 async def fetch_matrices(
@@ -47,37 +71,20 @@ async def fetch_matrices(
     url = f"{base}/table/v1/{prof}/{coords}?annotations=distance,duration"
 
     try:
-        async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=settings.http_osrm_timeout_seconds) as client:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
-
-        if data.get("code") != "Ok":
-            log.warning("OSRM table failed: %s, falling back to Haversine", data.get("code"))
-            return None, None
-
-        raw_d = data["distances"]
-        raw_t = data.get("durations")
-        n = len(points)
-        dist_m = [[0.0] * n for _ in range(n)]
-        dur_s = [[0.0] * n for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                if i == j:
-                    continue
-                dd = raw_d[i][j]
-                dist_m[i][j] = MISSING_EDGE_KM if dd is None else float(dd) / 1000.0
-                if raw_t is not None:
-                    tt = raw_t[i][j]
-                    dur_s[i][j] = MISSING_EDGE_SEC if tt is None else float(tt)
-                else:
-                    dur_s[i][j] = MISSING_EDGE_SEC
-
-        log.info("OSRM matrices built for %d points (profile=%s)", n, prof)
-        return dist_m, dur_s
     except Exception as exc:
         log.warning("OSRM request failed (%s), falling back to Haversine", exc)
         return None, None
+
+    parsed = _table_matrices_from_json(points, data)
+    if parsed is None:
+        return None, None
+    dist_m, dur_s = parsed
+    log.info("OSRM matrices built for %d points (profile=%s)", len(points), prof)
+    return dist_m, dur_s
 
 
 async def fetch_route_segments(
@@ -98,9 +105,8 @@ async def fetch_route_segments(
     segments: list[list[dict]] = []
     leg_durations_sec: list[float] = []
     try:
-        async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-            for i in range(len(ordered_points) - 1):
-                a, b = ordered_points[i], ordered_points[i + 1]
+        async with httpx.AsyncClient(timeout=settings.http_osrm_timeout_seconds) as client:
+            for a, b in _consecutive_pairs(ordered_points):
                 coords = f"{a['longitude']},{a['latitude']};{b['longitude']},{b['latitude']}"
                 url = f"{base}/route/v1/{prof}/{coords}?overview=full&geometries=geojson"
 

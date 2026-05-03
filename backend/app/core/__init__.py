@@ -1,1 +1,1 @@
-"""Cross-cutting concerns: settings, dependencies."""
+"""Configuration, logging, and security primitives."""
