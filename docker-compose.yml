@@ -2,7 +2,6 @@ services:
   postgres:
     image: postgres:16
     container_name: licenta-postgres
-    profiles: ["with-db"]
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-licenta_db}
@@ -12,9 +11,16 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   osrm-prepare-foot:
     image: osrm/osrm-backend:latest
+    platform: linux/amd64
     container_name: licenta-osrm-prepare-foot
     profiles: ["osrm-prepare"]
     entrypoint: /bin/sh
@@ -22,17 +28,18 @@ services:
       - -lc
       - >
         set -e;
-        test -f "/data/source/${OSM_FILE:-cluj.osm.pbf}";
+        test -f "/data/source/${OSM_FILE:-romania-260322.osm.pbf}";
         mkdir -p /data/foot;
-        cp "/data/source/${OSM_FILE:-cluj.osm.pbf}" /data/foot/;
-        osrm-extract -p /opt/foot.lua "/data/foot/${OSM_FILE:-cluj.osm.pbf}";
-        osrm-partition "/data/foot/${OSM_DATASET:-cluj.osm}.osrm";
-        osrm-customize "/data/foot/${OSM_DATASET:-cluj.osm}.osrm";
+        cp "/data/source/${OSM_FILE:-romania-260322.osm.pbf}" /data/foot/;
+        osrm-extract -p /opt/foot.lua "/data/foot/${OSM_FILE:-romania-260322.osm.pbf}";
+        osrm-partition "/data/foot/${OSM_DATASET:-romania-260322}.osrm";
+        osrm-customize "/data/foot/${OSM_DATASET:-romania-260322}.osrm";
     volumes:
-      - ./osrm-data:/data
+      - ./osrm-service/data:/data
 
   osrm-prepare-driving:
     image: osrm/osrm-backend:latest
+    platform: linux/amd64
     container_name: licenta-osrm-prepare-driving
     profiles: ["osrm-prepare"]
     entrypoint: /bin/sh
@@ -40,20 +47,21 @@ services:
       - -lc
       - >
         set -e;
-        test -f "/data/source/${OSM_FILE:-cluj.osm.pbf}";
+        test -f "/data/source/${OSM_FILE:-romania-260322.osm.pbf}";
         mkdir -p /data/driving;
-        cp "/data/source/${OSM_FILE:-cluj.osm.pbf}" /data/driving/;
-        osrm-extract -p /opt/car.lua "/data/driving/${OSM_FILE:-cluj.osm.pbf}";
-        osrm-partition "/data/driving/${OSM_DATASET:-cluj.osm}.osrm";
-        osrm-customize "/data/driving/${OSM_DATASET:-cluj.osm}.osrm";
+        cp "/data/source/${OSM_FILE:-romania-260322.osm.pbf}" /data/driving/;
+        osrm-extract -p /opt/car.lua "/data/driving/${OSM_FILE:-romania-260322.osm.pbf}";
+        osrm-partition "/data/driving/${OSM_DATASET:-romania-260322}.osrm";
+        osrm-customize "/data/driving/${OSM_DATASET:-romania-260322}.osrm";
     volumes:
-      - ./osrm-data:/data
+      - ./osrm-service/data:/data
 
   osrm-foot:
     image: osrm/osrm-backend:latest
+    platform: linux/amd64
     container_name: licenta-osrm-foot
     restart: unless-stopped
-    command: osrm-routed --algorithm mld --port 5000 "/data/foot/${OSM_DATASET:-cluj.osm}.osrm"
+    command: osrm-routed --algorithm mld --port 5000 "/data/foot/${OSM_DATASET:-romania-260322}.osrm"
     healthcheck:
       test: ["CMD-SHELL", "bash -lc '</dev/tcp/127.0.0.1/5000'"]
       interval: 10s
@@ -61,13 +69,14 @@ services:
       retries: 12
       start_period: 15s
     volumes:
-      - ./osrm-data:/data
+      - ./osrm-service/data:/data
 
   osrm-driving:
     image: osrm/osrm-backend:latest
+    platform: linux/amd64
     container_name: licenta-osrm-driving
     restart: unless-stopped
-    command: osrm-routed --algorithm mld --port 5001 "/data/driving/${OSM_DATASET:-cluj.osm}.osrm"
+    command: osrm-routed --algorithm mld --port 5001 "/data/driving/${OSM_DATASET:-romania-260322}.osrm"
     healthcheck:
       test: ["CMD-SHELL", "bash -lc '</dev/tcp/127.0.0.1/5001'"]
       interval: 10s
@@ -75,7 +84,7 @@ services:
       retries: 12
       start_period: 15s
     volumes:
-      - ./osrm-data:/data
+      - ./osrm-service/data:/data
 
   aco-service:
     build:
@@ -100,23 +109,31 @@ services:
       osrm-driving:
         condition: service_healthy
 
-  ai-service:
+  chat-service:
     build:
-      context: ./ai-service
-    container_name: licenta-ai
+      context: ./chat-service
+    container_name: licenta-chat
     restart: unless-stopped
     environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-licenta_db}}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me-use-openssl-rand-hex-32}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      CORS_ORIGINS_RAW: ${CORS_ORIGINS_RAW:-*}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b-instruct}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8001/health\")'"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8002/health\")'"]
       interval: 10s
       timeout: 5s
       retries: 8
       start_period: 6s
     ports:
-      - "8001:8001"
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
 
   verification-service:
     build:
@@ -141,10 +158,9 @@ services:
     container_name: licenta-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://postgres:postgres@host.docker.internal:5432/licenta_db}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-licenta_db}}
       ACO_SERVICE_URL: http://aco-service:8000
       VERIFICATION_SERVICE_URL: http://verification-service:8090
-      AI_SERVICE_URL: http://ai-service:8001
       CORS_ORIGINS_RAW: ${CORS_ORIGINS_RAW:-*}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me-use-openssl-rand-hex-32}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
@@ -168,11 +184,14 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
       aco-service:
         condition: service_healthy
       verification-service:
         condition: service_healthy
-      ai-service:
+      chat-service:
         condition: service_healthy
 
 volumes:

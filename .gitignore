@@ -9,7 +9,7 @@ Thumbs.db
 *.swo
 *~
 
-# ── Python (backend + aco-service) ──
+# ── Python (backend + microservices) ──
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,16 +19,13 @@ venv/
 env/
 *.egg-info/
 
-# ── Flutter / Dart (frontend) ──
-frontend/.dart_tool/
-frontend/.flutter-plugins
-frontend/.flutter-plugins-dependencies
-frontend/.packages
-frontend/.pub-cache/
-frontend/.pub/
-frontend/build/
-frontend/.ios/
-frontend/.android/
+# ── React Native / Node (frontend) ──
+frontend/node_modules/
+frontend/ios/Pods/
+frontend/ios/build/
+frontend/ios/DerivedData/
+frontend/ios/Pods/ReactNativeDependencies-artifacts/
+frontend/ios/build/generated/
 
 # ── Build artifacts ──
 build/
@@ -41,7 +38,7 @@ target/
 .env.production
 
 # ── OSRM preprocessed data (large, local-only) ──
-osrm-data/
+osrm-service/data/
 
 # ── Documentation (personal, not part of source) ──
 documentation/

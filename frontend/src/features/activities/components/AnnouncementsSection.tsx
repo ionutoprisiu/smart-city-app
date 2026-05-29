@@ -57,7 +57,7 @@ export const AnnouncementsSection: React.FC<Props> = ({
       setHint(
         clubMembershipStatus === 'PENDING'
           ? 'Your membership is pending. You will see announcements once an organizer approves you.'
-          : 'Join this club and get approved to see organizer announcements.',
+          : 'Join this group and get approved to see organizer announcements.',
       );
       setItems([]);
       return;

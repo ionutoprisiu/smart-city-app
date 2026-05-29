@@ -26,7 +26,7 @@ export const ActivitiesStack: React.FC = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen name="CreateEvent" component={CreateEventScreen} options={{ title: 'New event' }} />
-      <Stack.Screen name="CreateClub" component={CreateClubScreen} options={{ title: 'New club' }} />
+      <Stack.Screen name="CreateClub" component={CreateClubScreen} options={{ title: 'New group' }} />
     </Stack.Navigator>
   );
 };

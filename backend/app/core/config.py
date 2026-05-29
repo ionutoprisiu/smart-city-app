@@ -9,7 +9,6 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/licenta_db"
     aco_service_url: str = "http://localhost:8000"
     verification_service_url: str = "http://localhost:8090"
-    ai_service_url: str = "http://localhost:8001"
     cors_origins_raw: str = "*"
     jwt_secret_key: str = "dev-only-change-me-use-openssl-rand-hex-32"
     jwt_algorithm: str = "HS256"

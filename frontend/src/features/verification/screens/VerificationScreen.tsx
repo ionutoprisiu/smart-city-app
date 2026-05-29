@@ -27,7 +27,7 @@ import {
 import { AppRootStackParamList } from '@app/navigation/types';
 import { useAuthStore } from '@features/auth/store/authStore';
 
-type Nav = NativeStackNavigationProp<AppRootStackParamList, 'Verification'>;
+type Nav = NativeStackNavigationProp<AppRootStackParamList, 'BecomeOrganizer'>;
 
 type PickedImage = {
   uri: string;
@@ -104,7 +104,10 @@ export const VerificationScreen: React.FC = () => {
     if (idCardImage == null || selfieImage == null) return;
     const ok = await submitVerification({ idCardImage, selfieImage });
     if (ok) {
-      Alert.alert('Verification submitted', 'Verification request submitted.');
+      Alert.alert(
+        'Documents submitted',
+        'Your ID and selfie were sent for review. Once approved, you can become an organizer from Activities.',
+      );
       navigation.goBack();
     }
   };
@@ -167,7 +170,7 @@ export const VerificationScreen: React.FC = () => {
               themedStyles.introText,
             ]}
           >
-            Upload your ID card and a selfie.
+            To become an organizer, upload your ID card and a matching selfie. After approval, use Activities → Become organizer.
           </Text>
           <Text
             style={[
@@ -256,7 +259,7 @@ export const VerificationScreen: React.FC = () => {
           />
           <View style={themedStyles.spacer10} />
           <AppButton
-            label="Submit verification"
+            label="Submit for organizer review"
             iconName="verified-user"
             disabled={!idCardImage || !selfieImage || isLoading}
             onPress={submit}

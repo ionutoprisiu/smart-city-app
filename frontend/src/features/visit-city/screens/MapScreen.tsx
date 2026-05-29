@@ -49,6 +49,22 @@ const SEGMENT_COLORS = [
   '#795548',
 ];
 
+const CATEGORY_COLORS: Record<Attraction['category'], string> = {
+  museum: '#5C6BC0',
+  church: '#8D6E63',
+  square: '#546E7A',
+  monument: '#6D4C41',
+  fortress: '#7B1FA2',
+  park: '#2E7D32',
+  restaurant: '#EF6C00',
+  cafe: '#6D4C41',
+  shop: '#00897B',
+  theater: '#3949AB',
+  library: '#455A64',
+  hotel: '#5D4037',
+  other: '#616161',
+};
+
 const earthRadiusMeters = 6378137;
 
 const distanceMeters = (
@@ -241,6 +257,7 @@ type DisplayMarker =
       longitude: number;
       count: number;
       category: Attraction['category'];
+      attractionIds: number[];
     };
 
 /** Grid step ~square-ish in meters: lon step widens with cos(lat). */
@@ -334,6 +351,7 @@ const buildClusteredMarkers = (
       longitude: group.sumLon / group.items.length,
       count: group.items.length,
       category: group.items[0].category,
+      attractionIds: group.items.map((item) => item.id),
     });
   });
 
@@ -387,6 +405,7 @@ export const MapScreen: React.FC = () => {
   const {
     attractions,
     customPins,
+    selectedIds,
     selectedCount,
     routeResult,
     routeStarted,
@@ -409,8 +428,11 @@ export const MapScreen: React.FC = () => {
 
   const mapRef = useRef<MapView>(null);
   const didFitRoute = useRef(false);
+  const lastMarkerTapRef = useRef<{ id: number; ts: number } | null>(null);
   const [details, setDetails] = useState<Attraction | null>(null);
   const [pinOptions, setPinOptions] = useState<Attraction | null>(null);
+  const [clusterPicker, setClusterPicker] = useState<Extract<DisplayMarker, { kind: 'cluster' }> | null>(null);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region>(INITIAL_REGION);
   const themedStyles = {
     markerBorder: { borderColor: '#FFFFFF' },
@@ -438,11 +460,39 @@ export const MapScreen: React.FC = () => {
     pinTitle: { color: theme.colors.onSurface, marginLeft: 12, flex: 1 },
     pinCoord: { color: theme.colors.onSurfaceVariant, marginTop: 8 },
     spacer20: { height: 20 },
+    mapHintWrap: {
+      backgroundColor: theme.colors.surfaceContainerHighest + 'E8',
+      borderColor: theme.colors.outlineVariant + '80',
+    },
+    mapHintText: { color: theme.colors.onSurfaceVariant },
+    selectionToggleActive: {
+      backgroundColor: theme.colors.primaryContainer,
+      borderColor: theme.colors.primary + '6B',
+    },
+    selectionToggleInactive: {
+      backgroundColor: theme.colors.surfaceContainerHighest + 'E6',
+      borderColor: theme.colors.outlineVariant + '7A',
+    },
+    selectionToggleTextActive: { color: theme.colors.onPrimaryContainer },
+    selectionToggleTextInactive: { color: theme.colors.onSurface },
+    clusterSheetSub: { color: theme.colors.onSurfaceVariant, marginTop: 4 },
+    clusterRow: {
+      backgroundColor: theme.colors.surface + 'A6',
+      borderColor: theme.colors.outlineVariant + '5C',
+    },
+    clusterRowTitle: { color: theme.colors.onSurface },
+    clusterRowSub: { color: theme.colors.onSurfaceVariant, marginTop: 2 },
   };
 
   useEffect(() => {
     fetchUserLocation();
   }, [fetchUserLocation]);
+
+  useEffect(() => {
+    if (selectedIds.length === 0 && showSelectedOnly) {
+      setShowSelectedOnly(false);
+    }
+  }, [selectedIds.length, showSelectedOnly]);
 
   useEffect(() => {
     if (routeResult == null) {
@@ -520,10 +570,15 @@ export const MapScreen: React.FC = () => {
     return next;
   }, [routeResult]);
 
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
   const visibleAttractions = useMemo(
-    () =>
-      routeResult != null ? attractions.filter((a) => orderMap[a.id] != null) : attractions,
-    [attractions, orderMap, routeResult],
+    () => {
+      const base = routeResult != null ? attractions.filter((a) => orderMap[a.id] != null) : attractions;
+      if (!showSelectedOnly || selectedSet.size === 0) return base;
+      return base.filter((a) => selectedSet.has(a.id) || orderMap[a.id] != null);
+    },
+    [attractions, orderMap, routeResult, showSelectedOnly, selectedSet],
   );
 
   const viewportAttractions = useMemo(
@@ -561,6 +616,43 @@ export const MapScreen: React.FC = () => {
     [displayMarkers, mapRegion, footOnMap],
   );
 
+  const attractionById = useMemo(() => {
+    const next = new Map<number, Attraction>();
+    attractions.forEach((a) => next.set(a.id, a));
+    return next;
+  }, [attractions]);
+
+  const clusterAttractions = useMemo(() => {
+    if (clusterPicker == null) return [] as Attraction[];
+    return clusterPicker.attractionIds
+      .map((id) => attractionById.get(id))
+      .filter((value): value is Attraction => value != null)
+      .sort((a, b) => {
+        const aSelected = selectedSet.has(a.id);
+        const bSelected = selectedSet.has(b.id);
+        if (aSelected !== bSelected) return aSelected ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [clusterPicker, attractionById, selectedSet]);
+
+  const handleAttractionMarkerPress = (attraction: Attraction) => {
+    if (routeResult != null || routeStarted) {
+      setDetails(attraction);
+      return;
+    }
+
+    const now = Date.now();
+    const last = lastMarkerTapRef.current;
+    if (last != null && last.id === attraction.id && now - last.ts < 330) {
+      lastMarkerTapRef.current = null;
+      setDetails(attraction);
+      return;
+    }
+
+    lastMarkerTapRef.current = { id: attraction.id, ts: now };
+    toggleSelection(attraction.id);
+  };
+
   return (
     <View style={styles.root}>
       <MapView
@@ -592,6 +684,10 @@ export const MapScreen: React.FC = () => {
                 key={`cluster-${marker.id}`}
                 coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
                 onPress={() => {
+                  if (marker.count <= 12 && mapRegion.latitudeDelta <= 0.02) {
+                    setClusterPicker(marker);
+                    return;
+                  }
                   const zoom =
                     marker.count > 80
                       ? 0.35
@@ -626,7 +722,7 @@ export const MapScreen: React.FC = () => {
               coordinate={
                 shifted ?? { latitude: a.latitude, longitude: a.longitude }
               }
-              onPress={() => setDetails(a)}
+              onPress={() => handleAttractionMarkerPress(a)}
               tracksViewChanges={false}
             >
               <View
@@ -638,7 +734,8 @@ export const MapScreen: React.FC = () => {
                         ? theme.colors.primary
                         : selected
                         ? theme.colors.primary
-                        : theme.colors.surfaceContainerHighest + 'EB',
+                        : CATEGORY_COLORS[a.category] + 'CC',
+                    opacity: selectedSet.size > 0 && !selected && order == null ? 0.74 : 1,
                   },
                   selected || order != null
                     ? themedStyles.markerSelectedBorderWidth
@@ -710,6 +807,47 @@ export const MapScreen: React.FC = () => {
       </MapView>
 
       <SafeAreaView pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+        <View style={styles.topLeft} pointerEvents="box-none">
+          <View style={[styles.mapHint, themedStyles.mapHintWrap]}>
+            <Text style={[theme.typography.labelSmall, themedStyles.mapHintText]}>
+              Tap marker: quick select • Double tap: details
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setShowSelectedOnly((v) => !v)}
+            disabled={selectedIds.length === 0}
+            style={({ pressed }) => [
+              styles.selectionToggle,
+              showSelectedOnly
+                ? themedStyles.selectionToggleActive
+                : themedStyles.selectionToggleInactive,
+              {
+                opacity: selectedIds.length === 0 ? 0.45 : pressed ? 0.82 : 1,
+              },
+            ]}
+          >
+            <Icon
+              name={showSelectedOnly ? 'filter-alt' : 'filter-alt-off'}
+              size={16}
+              color={
+                showSelectedOnly
+                  ? theme.colors.onPrimaryContainer
+                  : theme.colors.onSurfaceVariant
+              }
+            />
+            <Text
+              style={[
+                theme.typography.labelMedium,
+                showSelectedOnly
+                  ? themedStyles.selectionToggleTextActive
+                  : themedStyles.selectionToggleTextInactive,
+              ]}
+            >
+              {showSelectedOnly ? 'Selected only' : 'Show selected only'}
+            </Text>
+          </Pressable>
+        </View>
+
         <View style={styles.topRight} pointerEvents="box-none">
           <MapControlsCard
             hasRoute={routeResult != null}
@@ -758,6 +896,83 @@ export const MapScreen: React.FC = () => {
           ) : null}
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={clusterPicker != null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setClusterPicker(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setClusterPicker(null)} />
+        <View
+          style={[
+            styles.modalSheet,
+            themedStyles.modalSheetBg,
+          ]}
+        >
+          <View style={[styles.handle, themedStyles.handleBg]} />
+          {clusterPicker != null ? (
+            <View style={themedStyles.modalContentPad}>
+              <Text style={[theme.typography.titleLarge, themedStyles.modalTitle]}>
+                {clusterPicker.count} places in this area
+              </Text>
+              <Text style={[theme.typography.bodyMedium, themedStyles.clusterSheetSub]}>
+                Tap to quickly add/remove attractions from route.
+              </Text>
+              <View style={themedStyles.spacer16} />
+              <View style={styles.clusterListWrap}>
+                {clusterAttractions.slice(0, 14).map((item) => {
+                  const selected = isSelected(item.id);
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => toggleSelection(item.id)}
+                      style={({ pressed }) => [
+                        styles.clusterRow,
+                        themedStyles.clusterRow,
+                        { opacity: pressed ? 0.84 : 1 },
+                      ]}
+                    >
+                      <Text style={styles.clusterRowEmoji}>{categoryIcon(item.category)}</Text>
+                      <View style={styles.clusterRowMain}>
+                        <Text
+                          numberOfLines={1}
+                          style={[theme.typography.labelLarge, themedStyles.clusterRowTitle]}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text
+                          style={[theme.typography.labelSmall, themedStyles.clusterRowSub]}
+                          numberOfLines={1}
+                        >
+                          {categoryLabel(item.category)}
+                        </Text>
+                      </View>
+                      <Icon
+                        name={selected ? 'check-circle' : 'add-circle-outline'}
+                        size={22}
+                        color={selected ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                      />
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {clusterAttractions.length > 14 ? (
+                <Text style={[theme.typography.labelSmall, themedStyles.clusterSheetSub]}>
+                  Zoom in to select from the full cluster ({clusterAttractions.length} total).
+                </Text>
+              ) : null}
+              <View style={themedStyles.spacer16} />
+              <AppButton
+                label="Close"
+                variant="outlined"
+                iconName="close"
+                onPress={() => setClusterPicker(null)}
+              />
+            </View>
+          ) : null}
+        </View>
+      </Modal>
 
       <Modal
         visible={details != null}
@@ -889,10 +1104,32 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  topLeft: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    maxWidth: 250,
+  },
   topRight: {
     position: 'absolute',
     top: 12,
     right: 12,
+  },
+  mapHint: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  selectionToggle: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   bottomBar: {
     position: 'absolute',
@@ -973,5 +1210,26 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     marginBottom: 8,
+  },
+  clusterListWrap: {
+    maxHeight: 360,
+    marginBottom: 12,
+    gap: 8,
+  },
+  clusterRow: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clusterRowEmoji: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  clusterRowMain: {
+    flex: 1,
+    marginRight: 10,
   },
 });

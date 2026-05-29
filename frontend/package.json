@@ -6,6 +6,7 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
+    "start:lan": "ulimit -n 16384 2>/dev/null || true; react-native start --host 0.0.0.0",
     "test": "jest",
     "typecheck": "tsc --noEmit"
   },
@@ -29,6 +30,7 @@
     "react-native-screens": "^4.24.0",
     "react-native-vector-icons": "^10.3.0",
     "react-native-worklets": "^0.8.1",
+    "socket.io-client": "^4.8.3",
     "zustand": "^5.0.12"
   },
   "devDependencies": {

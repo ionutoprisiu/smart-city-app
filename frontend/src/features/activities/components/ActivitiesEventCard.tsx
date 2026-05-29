@@ -15,6 +15,8 @@ type Props = {
   isLoading: boolean;
   themed: ActivitiesCardThemed;
   onCancelEvent: (eventId: number) => void;
+  /** When nested inside ActivityListingCard (kind tag is shown above). */
+  embedded?: boolean;
 };
 
 export const ActivitiesEventCard: React.FC<Props> = ({
@@ -23,6 +25,7 @@ export const ActivitiesEventCard: React.FC<Props> = ({
   isLoading,
   themed,
   onCancelEvent,
+  embedded = false,
 }) => {
   const theme = useTheme();
   const st = event.status.toUpperCase();
@@ -35,7 +38,7 @@ export const ActivitiesEventCard: React.FC<Props> = ({
     !!currentUser && (currentUser.role === 'admin' || event.createdBy === currentUser.id);
 
   return (
-    <View style={[styles.card, themed.cardBg]}>
+    <View style={[styles.card, embedded ? styles.cardEmbedded : null, themed.cardBg]}>
       <View style={styles.cardHeaderRow}>
         <Text style={[theme.typography.titleSmall, themed.cardTitle, styles.cardTitleFlex]}>{event.title}</Text>
         <View
@@ -109,6 +112,7 @@ export const ActivitiesEventCard: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   card: { marginTop: 12, borderWidth: 1, padding: 12 },
+  cardEmbedded: { marginTop: 0 },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   cardTitleFlex: { flex: 1 },
   statusPill: {

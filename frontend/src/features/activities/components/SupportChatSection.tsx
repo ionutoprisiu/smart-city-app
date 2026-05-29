@@ -11,7 +11,8 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { extractErrorMessage } from '@shared/api/errors';
 import { useTheme } from '@theme';
-import { ActivitiesApi } from '../api/activitiesApi';
+import { ChatApi } from '../api/chatApi';
+import { useActivityChatSocket } from '../hooks/useActivityChatSocket';
 import { ActivityChatMessage } from '../types';
 
 type Props = {
@@ -53,6 +54,27 @@ export const SupportChatSection: React.FC<Props> = ({
   const [sendRole, setSendRole] = useState<'USER' | 'ORGANIZER'>('USER');
   const chatScrollRef = useRef<ScrollView>(null);
 
+  const appendMessage = useCallback((message: ActivityChatMessage) => {
+    setItems((prev) => {
+      if (prev.some((m) => m.id === message.id)) return prev;
+      return [...prev, message];
+    });
+    requestAnimationFrame(() => chatScrollRef.current?.scrollToEnd({ animated: true }));
+  }, []);
+
+  const handleSocketError = useCallback((message: string) => {
+    setHint(message);
+  }, []);
+
+  const liveEnabled = expanded && canView && currentUserId != null;
+  const { sendMessage } = useActivityChatSocket({
+    kind,
+    resourceId,
+    enabled: liveEnabled,
+    onMessage: appendMessage,
+    onSocketError: handleSocketError,
+  });
+
   const load = useCallback(async () => {
     if (currentUserId == null) {
       setHint('Sign in to open support chat.');
@@ -74,8 +96,8 @@ export const SupportChatSection: React.FC<Props> = ({
     try {
       const list =
         kind === 'event'
-          ? await ActivitiesApi.listEventChat(resourceId)
-          : await ActivitiesApi.listClubChat(resourceId);
+          ? await ChatApi.listEventMessages(resourceId)
+          : await ChatApi.listClubMessages(resourceId);
       setItems(list);
     } catch (e: unknown) {
       setHint(extractErrorMessage(e) || 'Could not load chat');
@@ -99,19 +121,8 @@ export const SupportChatSection: React.FC<Props> = ({
     setPosting(true);
     setHint(null);
     try {
-      const posted =
-        kind === 'event'
-          ? await ActivitiesApi.postEventChat(resourceId, {
-              role: sendRole,
-              body: body.trim(),
-            })
-          : await ActivitiesApi.postClubChat(resourceId, {
-              role: sendRole,
-              body: body.trim(),
-            });
-      setItems((prev) => [...prev, posted.message, ...(posted.autoReply ? [posted.autoReply] : [])]);
+      await sendMessage({ role: sendRole, body: body.trim() });
       setBody('');
-      requestAnimationFrame(() => chatScrollRef.current?.scrollToEnd({ animated: true }));
     } catch (e: unknown) {
       setHint(extractErrorMessage(e) || 'Could not send message');
     } finally {

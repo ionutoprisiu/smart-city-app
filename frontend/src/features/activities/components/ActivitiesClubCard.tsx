@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@theme';
 import type { User } from '@shared/types/user';
 import { AnnouncementsSection } from './AnnouncementsSection';
+import { ClubPendingMembersSection } from './ClubPendingMembersSection';
 import { SupportChatSection } from './SupportChatSection';
 import type { ActivitiesCardThemed } from '../activitiesCardThemed';
 import type { Club } from '../types';
@@ -14,6 +15,8 @@ type Props = {
   themed: ActivitiesCardThemed;
   onJoinClub: (clubId: number) => void;
   onLeaveClub: (clubId: number) => void;
+  onClubUpdated?: (club: Club) => void;
+  embedded?: boolean;
 };
 
 export const ActivitiesClubCard: React.FC<Props> = ({
@@ -23,6 +26,8 @@ export const ActivitiesClubCard: React.FC<Props> = ({
   themed,
   onJoinClub,
   onLeaveClub,
+  onClubUpdated,
+  embedded = false,
 }) => {
   const theme = useTheme();
   const clubCanViewAnnouncements = currentUser?.role === 'admin' || club.membershipStatus === 'APPROVED';
@@ -31,7 +36,7 @@ export const ActivitiesClubCard: React.FC<Props> = ({
   const canPostClubAsOrganizer = !!currentUser && (currentUser.role === 'admin' || club.isClubAdmin);
 
   return (
-    <View style={[styles.card, themed.cardBg]}>
+    <View style={[styles.card, embedded ? styles.cardEmbedded : null, themed.cardBg]}>
       <Text style={[theme.typography.titleSmall, themed.cardTitle]}>{club.name}</Text>
       <Text style={[theme.typography.bodySmall, themed.cardSub]}>
         {club.membersCount} members • {club.city}
@@ -49,6 +54,11 @@ export const ActivitiesClubCard: React.FC<Props> = ({
       {club.description ? (
         <Text style={[theme.typography.bodyMedium, themed.cardSub, styles.cardDescription]}>{club.description}</Text>
       ) : null}
+      <ClubPendingMembersSection
+        clubId={club.id}
+        canManage={canPostClubAnnouncement}
+        onClubUpdated={onClubUpdated}
+      />
       <AnnouncementsSection
         kind="club"
         resourceId={club.id}
@@ -65,7 +75,7 @@ export const ActivitiesClubCard: React.FC<Props> = ({
         canPostOrganizer={canPostClubAsOrganizer}
         pendingHint={
           club.membershipStatus === 'PENDING'
-            ? 'Your club membership is pending. Chat unlocks after approval.'
+            ? 'Your group membership is pending. Chat unlocks after approval.'
             : undefined
         }
       />
@@ -80,7 +90,7 @@ export const ActivitiesClubCard: React.FC<Props> = ({
             club.joined ? themed.ctaDisabledText : themed.ctaText,
           ]}
         >
-          {club.joined ? 'Leave club' : 'Join club'}
+          {club.joined ? 'Leave group' : 'Join group'}
         </Text>
       </Pressable>
     </View>
@@ -89,6 +99,7 @@ export const ActivitiesClubCard: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   card: { marginTop: 12, borderWidth: 1, padding: 12 },
+  cardEmbedded: { marginTop: 0 },
   clubMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   tag: {
     alignSelf: 'flex-start',

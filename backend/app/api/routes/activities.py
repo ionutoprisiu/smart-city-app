@@ -7,16 +7,14 @@ from app.models.enums import Role, VerificationStatus
 from app.schemas.activities import (
     AnnouncementCreateRequest,
     AnnouncementResponse,
-    ChatMessageCreateRequest,
-    ChatMessageResponse,
-    ChatPostResponse,
     ClubCreateRequest,
+    ClubMembershipPendingResponse,
     ClubResponse,
     EventCreateRequest,
     EventResponse,
 )
 from app.schemas.auth import AuthResponse
-from app.services import activities_service, support_chat_service
+from app.services import activities_service
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -192,51 +190,40 @@ def leave_club(
         _raise_http(exc)
 
 
-@router.get("/events/{event_id}/chat", response_model=list[ChatMessageResponse])
-def list_event_chat_messages(
-    event_id: int,
-    db: Session = Depends(get_db),
-    current_user_id: int = Depends(get_current_user_id),
-) -> list[ChatMessageResponse]:
-    try:
-        return support_chat_service.list_event_messages(db, event_id, current_user_id)
-    except (ValueError, PermissionError) as exc:
-        _raise_http(exc)
-
-
-@router.post("/events/{event_id}/chat", response_model=ChatPostResponse)
-def post_event_chat_message(
-    event_id: int,
-    req: ChatMessageCreateRequest,
-    db: Session = Depends(get_db),
-    current_user_id: int = Depends(get_current_user_id),
-) -> ChatPostResponse:
-    try:
-        return support_chat_service.post_event_message(db, event_id, current_user_id, req)
-    except (ValueError, PermissionError) as exc:
-        _raise_http(exc)
-
-
-@router.get("/clubs/{club_id}/chat", response_model=list[ChatMessageResponse])
-def list_club_chat_messages(
+@router.get("/clubs/{club_id}/memberships/pending", response_model=list[ClubMembershipPendingResponse])
+def list_pending_club_memberships(
     club_id: int,
     db: Session = Depends(get_db),
     current_user_id: int = Depends(get_current_user_id),
-) -> list[ChatMessageResponse]:
+) -> list[ClubMembershipPendingResponse]:
     try:
-        return support_chat_service.list_club_messages(db, club_id, current_user_id)
+        return activities_service.list_pending_club_memberships(db, club_id, current_user_id)
     except (ValueError, PermissionError) as exc:
         _raise_http(exc)
 
 
-@router.post("/clubs/{club_id}/chat", response_model=ChatPostResponse)
-def post_club_chat_message(
+@router.post("/clubs/{club_id}/memberships/{membership_id}/approve", response_model=ClubResponse)
+def approve_club_membership(
     club_id: int,
-    req: ChatMessageCreateRequest,
+    membership_id: int,
     db: Session = Depends(get_db),
     current_user_id: int = Depends(get_current_user_id),
-) -> ChatPostResponse:
+) -> ClubResponse:
     try:
-        return support_chat_service.post_club_message(db, club_id, current_user_id, req)
+        return activities_service.approve_club_membership(db, club_id, membership_id, current_user_id)
     except (ValueError, PermissionError) as exc:
-        _raise_http(exc)
+        _raise_http(exc, value_error_status=400)
+
+
+@router.post("/clubs/{club_id}/memberships/{membership_id}/reject", response_model=ClubResponse)
+def reject_club_membership(
+    club_id: int,
+    membership_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+) -> ClubResponse:
+    try:
+        return activities_service.reject_club_membership(db, club_id, membership_id, current_user_id)
+    except (ValueError, PermissionError) as exc:
+        _raise_http(exc, value_error_status=400)
+

@@ -13,6 +13,7 @@ from app.schemas.activities import (
     AnnouncementCreateRequest,
     AnnouncementResponse,
     ClubCreateRequest,
+    ClubMembershipPendingResponse,
     ClubResponse,
     EventCreateRequest,
     EventResponse,
@@ -198,6 +199,42 @@ def leave_club(db: Session, club_id: int, user_id: int) -> ClubResponse:
     return _club_with_counts(db, club, user_id)
 
 
+def list_pending_club_memberships(
+    db: Session, club_id: int, actor_user_id: int
+) -> list[ClubMembershipPendingResponse]:
+    club = _get_active_club(db, club_id)
+    if club is None:
+        raise ValueError("Club not found")
+    actor = _ensure_user_exists(db, actor_user_id)
+    if not _user_is_club_admin(db, club, actor.id) and actor.role != Role.ADMIN.value:
+        raise PermissionError("Only club admins can view pending memberships")
+
+    rows = db.execute(
+        select(ClubMembership, User)
+        .join(User, User.id == ClubMembership.user_id)
+        .where(
+            ClubMembership.club_id == club.id,
+            ClubMembership.status == "PENDING",
+        )
+        .order_by(ClubMembership.joined_at.asc())
+    ).all()
+    return [_pending_membership_to_response(m, u) for m, u in rows]
+
+
+def approve_club_membership(db: Session, club_id: int, membership_id: int, actor_user_id: int) -> ClubResponse:
+    membership, club = _get_pending_membership_for_admin(db, club_id, membership_id, actor_user_id)
+    membership.status = "APPROVED"
+    db.commit()
+    return _club_with_counts(db, club, actor_user_id)
+
+
+def reject_club_membership(db: Session, club_id: int, membership_id: int, actor_user_id: int) -> ClubResponse:
+    membership, club = _get_pending_membership_for_admin(db, club_id, membership_id, actor_user_id)
+    db.delete(membership)
+    db.commit()
+    return _club_with_counts(db, club, actor_user_id)
+
+
 def list_event_announcements(db: Session, event_id: int) -> list[AnnouncementResponse]:
     event = _get_event_not_deleted(db, event_id)
     if event is None:
@@ -280,6 +317,42 @@ def _get_club_membership(db: Session, club_id: int, user_id: int) -> ClubMembers
             ClubMembership.user_id == user_id,
         )
     ).scalar_one_or_none()
+
+
+def _get_pending_membership_for_admin(
+    db: Session, club_id: int, membership_id: int, actor_user_id: int
+) -> tuple[ClubMembership, Club]:
+    club = _get_active_club(db, club_id)
+    if club is None:
+        raise ValueError("Club not found")
+    actor = _ensure_user_exists(db, actor_user_id)
+    if not _user_is_club_admin(db, club, actor.id) and actor.role != Role.ADMIN.value:
+        raise PermissionError("Only club admins can manage memberships")
+
+    membership = db.execute(
+        select(ClubMembership).where(
+            ClubMembership.id == membership_id,
+            ClubMembership.club_id == club.id,
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        raise ValueError("Membership not found")
+    if membership.status != "PENDING":
+        raise ValueError("Only pending memberships can be approved or rejected")
+    return membership, club
+
+
+def _pending_membership_to_response(membership: ClubMembership, user: User) -> ClubMembershipPendingResponse:
+    return ClubMembershipPendingResponse(
+        membershipId=membership.id,
+        userId=user.id,
+        userEmail=user.email,
+        userFirstName=user.first_name,
+        userLastName=user.last_name,
+        role=membership.role,
+        status=membership.status,
+        joinedAt=membership.joined_at,
+    )
 
 
 def _list_announcements_for_event(db: Session, event_id: int) -> list[ActivityAnnouncement]:

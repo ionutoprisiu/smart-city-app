@@ -14,10 +14,10 @@ Full-stack thesis project for smart tourism in Cluj-Napoca:
 licenta-app/
 ├── backend/               # FastAPI API gateway + business logic (port 8080)
 ├── aco-service/           # FastAPI microservice for route optimization (port 8000)
-├── ai-service/            # FastAPI microservice for organizer–user support matching (port 8001)
+├── chat-service/          # FastAPI + Socket.IO for activity chat + LLM auto-reply (port 8002)
 ├── verification-service/  # FastAPI microservice for identity verification (port 8090)
 ├── frontend/              # React Native (iOS) client app
-├── osrm-data/             # Prepared OSRM datasets
+├── osrm-service/          # OSRM graph data + prepare (see data/)
 └── docker-compose.yml     # Full local stack
 ```
 
@@ -29,7 +29,7 @@ Modular FastAPI service with layers:
 
 - `api/` routes + deps + HTTP errors
 - `services/` business use-cases
-- `integrations/` outbound clients (`aco`, `verification`, `overpass`, `ai`)
+- `integrations/` outbound clients (`aco`, `verification`, `overpass`)
 - `db/` SQLAlchemy setup + schema updates + seed
 - `models/` ORM entities
 - `schemas/` Pydantic DTOs
@@ -41,7 +41,7 @@ Primary responsibilities:
 - visit-city listing/filter/live discovery
 - route optimization orchestration (`backend -> aco-service`)
 - verification orchestration (`backend -> verification-service`)
-- activities (events/clubs) and organizer–member chat; optional auto-reply via `backend -> ai-service` (`/api/v1/support/match`)
+- activities (events/clubs); support chat via `chat-service` (REST history + Socket.IO + in-process LLM auto-reply)
 
 ### ACO Service (`aco-service`)
 
@@ -60,10 +60,11 @@ FastAPI microservice for identity checks:
 - OCR text extraction preview (`pytesseract`)
 - decision thresholds: approved / manualReview / rejected
 
-### AI Service (`ai-service`)
+### Chat Service (`chat-service`)
 
-- exposes `POST /api/v1/support/match` only (no general “city assistant” API)
-- calls **Ollama** via an OpenAI-compatible base URL (`LLM_BASE_URL`, typically `…/v1` on the host)
+- activity support chat (REST + Socket.IO)
+- semantic auto-reply via **Ollama** (`LLM_BASE_URL`, typically `http://host.docker.internal:11434/v1` on the host)
+- lexical fallback when the LLM is unavailable
 
 ### Frontend (`frontend`)
 
@@ -86,15 +87,14 @@ React Native + TypeScript app (iOS-first):
 - `POST /api/visit-city/optimize`
 - `POST /api/verification/submit`
 - `GET /api/verification/status/{user_id}`
-- `POST /api/activities/events/{event_id}/chat`
-- `GET /api/activities/events/{event_id}/chat?userId=...`
-- `POST /api/activities/clubs/{club_id}/chat`
-- `GET /api/activities/clubs/{club_id}/chat?userId=...`
 - `GET /health`
 
-### AI Service (8001)
+### Chat Service (8002)
 
-- `POST /api/v1/support/match` — semantic match for user question vs previous Q/A from the same event/club
+- `GET /api/v1/events/{eventId}/messages` — chat history (JWT)
+- `GET /api/v1/clubs/{clubId}/messages` — chat history (JWT)
+- Socket.IO: `chat_join`, `chat_leave`, `chat_send` → `chat:message` (JWT in connect `auth.token`)
+- in-process LLM match for organizer auto-reply (Ollama + lexical fallback)
 - `GET /health`
 
 ### ACO Service (8000)
@@ -121,12 +121,12 @@ React Native + TypeScript app (iOS-first):
 cp .env.example .env
 ```
 
-Root `.env` controls PostgreSQL and OSRM dataset names.
+Root `.env` controls PostgreSQL and OSRM dataset names (`OSM_FILE` / `OSM_DATASET`; default Romania extract in `osrm-service/data/source/`).
 
 ### 2) Start full services stack
 
 ```bash
-docker compose --profile with-db up -d postgres osrm-foot osrm-driving aco-service verification-service ai-service backend
+docker compose --profile with-db up -d postgres osrm-foot osrm-driving aco-service verification-service chat-service backend
 ```
 
 Optional OSRM prepare profile (if datasets are not already generated):
@@ -140,7 +140,7 @@ docker compose --profile osrm-prepare up osrm-prepare-foot osrm-prepare-driving
 ```bash
 curl http://localhost:8080/health
 curl http://localhost:8000/health
-curl http://localhost:8001/health
+curl http://localhost:8002/health
 curl http://localhost:8090/health
 ```
 
@@ -158,7 +158,7 @@ For physical iPhone, backend base URL is set in:
 
 - `frontend/src/shared/api/config.ts`
 
-Use your Mac LAN IP in the same Wi-Fi network as the phone.
+Use your Mac LAN IP in the same Wi-Fi network as the phone. Chat uses port **8002** (`frontend/src/shared/api/chatConfig.ts`, same `LOCAL_IP` as the API).
 
 ## Quality Gates
 
@@ -170,19 +170,18 @@ npm run typecheck
 npm test -- --runInBand
 ```
 
-Backend / AI (pytest inside Docker, same images as compose):
+Backend / chat (pytest inside Docker, same images as compose):
 
 ```bash
-docker compose build backend ai-service
-docker compose up -d backend ai-service
+docker compose build backend chat-service
+docker compose up -d backend chat-service
 docker exec licenta-backend pytest tests/ -q
-docker exec licenta-ai pytest tests/ -q
+docker exec licenta-chat python -m pytest tests/ -q
 ```
 
 ## Notes
 
 - Project currently targets iOS for mobile client.
-- Flutter frontend was removed after RN migration.
 - This repository uses a single top-level README by design.
 
 ## License

@@ -227,26 +227,11 @@ export const ProfileScreen: React.FC = () => {
         />
         <ProfileTile
           icon="verified-user"
-          title="Verification"
+          title="Become an organizer"
           subtitle={verificationStatusLabel(currentUser.verificationStatus)}
           rightIcon={vTone.icon}
           rightColor={vTone.color}
-          onPress={() => navigation.navigate('Verification')}
-        />
-      </Section>
-
-      <Section title="About">
-        <ProfileTile
-          icon="location-city"
-          title="City profile"
-          subtitle="Cluj-Napoca"
-          onPress={() => {}}
-        />
-        <ProfileTile
-          icon="info"
-          title="App"
-          subtitle="Smart City · v1.0"
-          onPress={() => {}}
+          onPress={() => navigation.navigate('BecomeOrganizer')}
         />
       </Section>
 

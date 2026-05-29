@@ -4,14 +4,12 @@ import { authResponseFromJson, AuthResponse } from '@features/auth/types';
 import { ACTIVITIES_CITY } from '../constants';
 import {
   ActivityAnnouncement,
-  ActivityChatMessage,
-  ActivityChatPostResult,
   ActivityEvent,
   announcementFromJson,
-  chatMessageFromJson,
-  chatPostResultFromJson,
   Club,
   clubFromJson,
+  ClubMembershipPending,
+  clubMembershipPendingFromJson,
   eventFromJson,
 } from '../types';
 
@@ -116,6 +114,27 @@ export const ActivitiesApi = {
     return clubFromJson(data);
   },
 
+  async listPendingClubMemberships(clubId: number): Promise<ClubMembershipPending[]> {
+    const data = await ApiClient.getList(`/activities/clubs/${clubId}/memberships/pending`);
+    return data.map((x) => clubMembershipPendingFromJson(x));
+  },
+
+  async approveClubMembership(clubId: number, membershipId: number): Promise<Club> {
+    const data = await ApiClient.post(
+      `/activities/clubs/${clubId}/memberships/${membershipId}/approve`,
+      {},
+    );
+    return clubFromJson(data);
+  },
+
+  async rejectClubMembership(clubId: number, membershipId: number): Promise<Club> {
+    const data = await ApiClient.post(
+      `/activities/clubs/${clubId}/memberships/${membershipId}/reject`,
+      {},
+    );
+    return clubFromJson(data);
+  },
+
   async cancelEvent(eventId: number): Promise<ActivityEvent> {
     const data = await ApiClient.post(`/activities/events/${eventId}/cancel`, {});
     return eventFromJson(data);
@@ -147,37 +166,4 @@ export const ActivitiesApi = {
     return announcementFromJson(data);
   },
 
-  async listEventChat(eventId: number): Promise<ActivityChatMessage[]> {
-    const data = await ApiClient.getList(`/activities/events/${eventId}/chat`);
-    return data.map((x) => chatMessageFromJson(x));
-  },
-
-  async postEventChat(
-    eventId: number,
-    args: { role: 'USER' | 'ORGANIZER'; body: string; inReplyToMessageId?: number | null },
-  ): Promise<ActivityChatPostResult> {
-    const data = await ApiClient.post(`/activities/events/${eventId}/chat`, {
-      role: args.role,
-      body: args.body,
-      inReplyToMessageId: args.inReplyToMessageId ?? null,
-    });
-    return chatPostResultFromJson(data);
-  },
-
-  async listClubChat(clubId: number): Promise<ActivityChatMessage[]> {
-    const data = await ApiClient.getList(`/activities/clubs/${clubId}/chat`);
-    return data.map((x) => chatMessageFromJson(x));
-  },
-
-  async postClubChat(
-    clubId: number,
-    args: { role: 'USER' | 'ORGANIZER'; body: string; inReplyToMessageId?: number | null },
-  ): Promise<ActivityChatPostResult> {
-    const data = await ApiClient.post(`/activities/clubs/${clubId}/chat`, {
-      role: args.role,
-      body: args.body,
-      inReplyToMessageId: args.inReplyToMessageId ?? null,
-    });
-    return chatPostResultFromJson(data);
-  },
 };

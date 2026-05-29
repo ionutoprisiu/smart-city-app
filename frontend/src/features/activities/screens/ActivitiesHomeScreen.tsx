@@ -3,6 +3,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,24 +19,27 @@ import { StorageService } from '@shared/storage/storageService';
 import { useTheme } from '@theme';
 import { useAuthStore } from '@features/auth/store/authStore';
 import { ActivitiesApi } from '../api/activitiesApi';
-import { ActivitiesClubCard } from '../components/ActivitiesClubCard';
+import { ActivityListingCard } from '../components/ActivityListingCard';
 import type { ActivitiesCardThemed } from '../activitiesCardThemed';
-import { ActivitiesEventCard } from '../components/ActivitiesEventCard';
 import { ACTIVITIES_CITY } from '../constants';
-import { ActivityEvent, Club } from '../types';
-
-type Segment = 'events' | 'clubs';
-type ActivityScope = 'all' | 'mine';
+import type { ActivityEvent, ActivityListFilter, Club } from '../types';
+import { buildActivityListings, filterActivityListings } from '../utils/buildActivityListings';
 
 type Nav = NativeStackNavigationProp<ActivitiesStackParamList, 'ActivitiesHome'>;
+
+const FILTERS: { id: ActivityListFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'event', label: 'Events' },
+  { id: 'group', label: 'Groups' },
+  { id: 'mine', label: 'Mine' },
+];
 
 export const ActivitiesHomeScreen: React.FC = () => {
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
   const currentUser = useAuthStore((s) => s.currentUser);
   const setCurrentUser = useAuthStore.setState;
-  const [segment, setSegment] = useState<Segment>('events');
-  const [scope, setScope] = useState<ActivityScope>('all');
+  const [filter, setFilter] = useState<ActivityListFilter>('all');
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,6 +47,11 @@ export const ActivitiesHomeScreen: React.FC = () => {
 
   const isOrganizer = currentUser?.role === 'organizer' || currentUser?.role === 'admin';
   const canBecomeOrganizer = !isOrganizer && currentUser?.isVerified === true;
+
+  const listings = useMemo(
+    () => filterActivityListings(buildActivityListings(events, clubs), filter, currentUser?.id),
+    [events, clubs, filter, currentUser?.id],
+  );
 
   const setActionError = useCallback((error: unknown, fallback: string) => {
     const message = extractErrorMessage(error);
@@ -100,7 +109,7 @@ export const ActivitiesHomeScreen: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const useMine = scope === 'mine' && currentUser != null;
+      const useMine = filter === 'mine' && currentUser != null;
       const [nextEvents, nextClubs] = await Promise.all(
         useMine
           ? [ActivitiesApi.listMyEvents(), ActivitiesApi.listMyClubs()]
@@ -109,11 +118,11 @@ export const ActivitiesHomeScreen: React.FC = () => {
       setEvents(nextEvents);
       setClubs(nextClubs);
     } catch (e: unknown) {
-      setActionError(e, 'Failed to load activities');
+      setActionError(e, 'Failed to load community activities');
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, scope, setActionError]);
+  }, [currentUser, filter, setActionError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -142,6 +151,14 @@ export const ActivitiesHomeScreen: React.FC = () => {
     }
   };
 
+  const onCreateActivity = () => {
+    Alert.alert('Create activity', 'Add an event or a group to the community.', [
+      { text: 'Event', onPress: () => navigation.navigate('CreateEvent') },
+      { text: 'Group', onPress: () => navigation.navigate('CreateClub') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const onJoinClub = async (clubId: number) => {
     if (!currentUser) return;
     setIsLoading(true);
@@ -150,11 +167,15 @@ export const ActivitiesHomeScreen: React.FC = () => {
       const updated = await ActivitiesApi.joinClub(clubId);
       setClubs((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     } catch (e: unknown) {
-      setActionError(e, 'Could not join club');
+      setActionError(e, 'Could not join group');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const onClubUpdated = useCallback((updated: Club) => {
+    setClubs((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  }, []);
 
   const onLeaveClub = async (clubId: number) => {
     if (!currentUser) return;
@@ -162,13 +183,13 @@ export const ActivitiesHomeScreen: React.FC = () => {
     setErrorMessage(null);
     try {
       const updated = await ActivitiesApi.leaveClub(clubId);
-      if (scope === 'mine') {
+      if (filter === 'mine') {
         setClubs((prev) => prev.filter((c) => c.id !== clubId));
       } else {
         setClubs((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       }
     } catch (e: unknown) {
-      setActionError(e, 'Could not leave club');
+      setActionError(e, 'Could not leave group');
     } finally {
       setIsLoading(false);
     }
@@ -191,9 +212,9 @@ export const ActivitiesHomeScreen: React.FC = () => {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.root, themedStyles.rootBg]}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={[theme.typography.headlineSmall, themedStyles.title]}>Activities</Text>
+        <Text style={[theme.typography.headlineSmall, themedStyles.title]}>Community</Text>
         <Text style={[theme.typography.bodyMedium, themedStyles.subtitle]}>
-          Events and clubs in {ACTIVITIES_CITY}.
+          Events and groups in {ACTIVITIES_CITY} — one place to discover and join.
         </Text>
 
         {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
@@ -202,7 +223,8 @@ export const ActivitiesHomeScreen: React.FC = () => {
           <View style={[styles.panel, themedStyles.cardBg]}>
             <Text style={[theme.typography.titleSmall, themedStyles.cardTitle]}>Organizer access</Text>
             <Text style={[theme.typography.bodySmall, themedStyles.cardSub]}>
-              Verified users can publish events and create clubs.
+              After your identity is approved (Profile → Become an organizer), you can publish events and
+              groups here.
             </Text>
             <Pressable
               onPress={onBecomeOrganizer}
@@ -218,7 +240,7 @@ export const ActivitiesHomeScreen: React.FC = () => {
                   canBecomeOrganizer ? themedStyles.becomeOrganizerText : themedStyles.ctaDisabledText,
                 ]}
               >
-                {canBecomeOrganizer ? 'Become organizer' : 'Verification required'}
+                {canBecomeOrganizer ? 'Become organizer' : 'Verify identity first'}
               </Text>
             </Pressable>
           </View>
@@ -226,146 +248,78 @@ export const ActivitiesHomeScreen: React.FC = () => {
           <View style={[styles.panel, themedStyles.cardBg, themedStyles.organizerPanelBg]}>
             <Text style={[theme.typography.titleSmall, themedStyles.cardTitle]}>Organizer</Text>
             <Text style={[theme.typography.bodySmall, themedStyles.cardSub, styles.organizerSub]}>
-              Create a new listing on a dedicated screen with full details.
+              Publish a timed event or an ongoing group — both appear in the same feed.
             </Text>
-            <View style={styles.organizerRow}>
-              <Pressable
-                onPress={() => navigation.navigate('CreateEvent')}
-                style={({ pressed }) => [
-                  styles.organizerAction,
-                  themedStyles.actionCardBg,
-                  { opacity: pressed ? 0.92 : 1 },
-                ]}
-              >
-                <View style={[styles.organizerIconWrap, { backgroundColor: theme.colors.primaryContainer + 'CC' }]}>
-                  <Icon name="event-available" size={22} color={theme.colors.onPrimaryContainer} />
-                </View>
-                <Text style={[theme.typography.titleSmall, themedStyles.cardTitle]}>Create event</Text>
-                <Text style={[theme.typography.bodySmall, themedStyles.cardSub]}>Schedule, place, category</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => navigation.navigate('CreateClub')}
-                style={({ pressed }) => [
-                  styles.organizerAction,
-                  themedStyles.actionCardBg,
-                  { opacity: pressed ? 0.92 : 1 },
-                ]}
-              >
-                <View style={[styles.organizerIconWrap, { backgroundColor: theme.colors.primaryContainer + 'CC' }]}>
-                  <Icon name="groups" size={22} color={theme.colors.onPrimaryContainer} />
-                </View>
-                <Text style={[theme.typography.titleSmall, themedStyles.cardTitle]}>Create club</Text>
-                <Text style={[theme.typography.bodySmall, themedStyles.cardSub]}>Community & visibility</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={onCreateActivity}
+              style={({ pressed }) => [
+                styles.createBtn,
+                themedStyles.ctaBg,
+                { opacity: pressed ? 0.92 : 1 },
+              ]}
+            >
+              <Icon name="add" size={20} color={themedStyles.ctaText.color} />
+              <Text style={[theme.typography.labelLarge, themedStyles.ctaText]}>Create activity</Text>
+            </Pressable>
           </View>
         )}
 
-        <View style={[styles.segmentWrap, themedStyles.segmentWrap]}>
-          <Pressable
-            onPress={() => setSegment('events')}
-            style={[
-              styles.segmentBtn,
-              segment === 'events' ? themedStyles.segmentActive : themedStyles.segmentInactive,
-            ]}
-          >
-            <Icon
-              name="event"
-              size={16}
-              color={segment === 'events' ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant}
-            />
-            <Text
-              style={[
-                theme.typography.labelLarge,
-                segment === 'events' ? themedStyles.segmentTextActive : themedStyles.segmentTextInactive,
-                styles.segmentText,
-              ]}
-            >
-              Events
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setSegment('clubs')}
-            style={[
-              styles.segmentBtn,
-              segment === 'clubs' ? themedStyles.segmentActive : themedStyles.segmentInactive,
-            ]}
-          >
-            <Icon
-              name="groups"
-              size={16}
-              color={segment === 'clubs' ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant}
-            />
-            <Text
-              style={[
-                theme.typography.labelLarge,
-                segment === 'clubs' ? themedStyles.segmentTextActive : themedStyles.segmentTextInactive,
-                styles.segmentText,
-              ]}
-            >
-              Clubs
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.scopeRow}>
-          <Pressable
-            onPress={() => setScope('all')}
-            style={[styles.scopeBtn, scope === 'all' ? themedStyles.segmentActive : themedStyles.segmentInactive]}
-          >
-            <Text
-              style={[
-                theme.typography.labelMedium,
-                scope === 'all' ? themedStyles.segmentTextActive : themedStyles.segmentTextInactive,
-              ]}
-            >
-              All
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setScope('mine')}
-            disabled={!currentUser}
-            style={[
-              styles.scopeBtn,
-              scope === 'mine' ? themedStyles.segmentActive : themedStyles.segmentInactive,
-              !currentUser ? styles.scopeBtnDisabled : null,
-            ]}
-          >
-            <Text
-              style={[
-                theme.typography.labelMedium,
-                scope === 'mine' ? themedStyles.segmentTextActive : themedStyles.segmentTextInactive,
-              ]}
-            >
-              My {segment === 'events' ? 'events' : 'clubs'}
-            </Text>
-          </Pressable>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterRow}
+        >
+          {FILTERS.map((f) => {
+            const active = filter === f.id;
+            const disabled = f.id === 'mine' && !currentUser;
+            return (
+              <Pressable
+                key={f.id}
+                onPress={() => setFilter(f.id)}
+                disabled={disabled}
+                style={[
+                  styles.filterChip,
+                  active ? themedStyles.segmentActive : themedStyles.segmentInactive,
+                  disabled ? styles.filterChipDisabled : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    theme.typography.labelMedium,
+                    active ? themedStyles.segmentTextActive : themedStyles.segmentTextInactive,
+                  ]}
+                >
+                  {f.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         {isLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
 
-        {segment === 'events'
-          ? events.map((event) => (
-              <ActivitiesEventCard
-                key={`event-${event.id}`}
-                event={event}
-                currentUser={currentUser}
-                isLoading={isLoading}
-                themed={cardThemed}
-                onCancelEvent={onCancelEvent}
-              />
-            ))
-          : clubs.map((club) => (
-              <ActivitiesClubCard
-                key={`club-${club.id}`}
-                club={club}
-                currentUser={currentUser}
-                isLoading={isLoading}
-                themed={cardThemed}
-                onJoinClub={onJoinClub}
-                onLeaveClub={onLeaveClub}
-              />
-            ))}
+        {!isLoading && listings.length === 0 ? (
+          <Text style={[theme.typography.bodyMedium, themedStyles.cardSub, styles.empty]}>
+            {filter === 'mine'
+              ? 'You have no events or groups here yet.'
+              : 'No activities match this filter.'}
+          </Text>
+        ) : null}
+
+        {listings.map((listing) => (
+          <ActivityListingCard
+            key={listing.kind === 'event' ? `event-${listing.event.id}` : `group-${listing.club.id}`}
+            listing={listing}
+            currentUser={currentUser}
+            isLoading={isLoading}
+            themed={cardThemed}
+            onCancelEvent={onCancelEvent}
+            onJoinClub={onJoinClub}
+            onLeaveClub={onLeaveClub}
+            onClubUpdated={onClubUpdated}
+          />
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -377,51 +331,24 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   panel: { borderWidth: 1, padding: 12, marginTop: 14 },
   organizerSub: { marginTop: 4 },
-  organizerRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  organizerAction: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    padding: 12,
-    minHeight: 120,
-  },
-  organizerIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
   cta: { marginTop: 10, borderRadius: 12, paddingVertical: 11, alignItems: 'center' },
-  segmentWrap: {
-    marginTop: 14,
-    borderRadius: 14,
+  createBtn: {
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
     flexDirection: 'row',
-    padding: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
     alignItems: 'center',
-    flexDirection: 'row',
     justifyContent: 'center',
+    gap: 6,
   },
-  segmentText: { marginLeft: 6 },
-  scopeRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    gap: 8,
-  },
-  scopeBtn: {
+  filterScroll: { marginTop: 14 },
+  filterRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  filterChip: {
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  scopeBtnDisabled: {
-    opacity: 0.45,
-  },
+  filterChipDisabled: { opacity: 0.45 },
   loader: { marginTop: 18 },
+  empty: { marginTop: 20, textAlign: 'center' },
 });

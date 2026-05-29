@@ -55,6 +55,17 @@ class ClubResponse(BaseModel):
     membershipStatus: str | None = None
 
 
+class ClubMembershipPendingResponse(BaseModel):
+    membershipId: int
+    userId: int
+    userEmail: str
+    userFirstName: str
+    userLastName: str
+    role: str
+    status: str
+    joinedAt: datetime
+
+
 class AnnouncementCreateRequest(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     body: str = Field(min_length=1, max_length=8000)

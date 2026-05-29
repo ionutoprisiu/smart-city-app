@@ -31,6 +31,26 @@ export type Club = {
   membershipStatus: string | null;
 };
 
+/** Unified listing kind shown in the app (groups = clubs in the API). */
+export type ActivityKind = 'event' | 'group';
+
+export type ActivityListing =
+  | { kind: 'event'; event: ActivityEvent; sortAt: string }
+  | { kind: 'group'; club: Club; sortAt: string };
+
+export type ActivityListFilter = 'all' | 'event' | 'group' | 'mine';
+
+export type ClubMembershipPending = {
+  membershipId: number;
+  userId: number;
+  userEmail: string;
+  userFirstName: string;
+  userLastName: string;
+  role: string;
+  status: string;
+  joinedAt: string;
+};
+
 export type ActivityAnnouncement = {
   id: number;
   title: string;
@@ -93,6 +113,17 @@ export const clubFromJson = (json: any): Club => ({
       : null,
 });
 
+export const clubMembershipPendingFromJson = (json: any): ClubMembershipPending => ({
+  membershipId: Number(json?.membershipId ?? 0),
+  userId: Number(json?.userId ?? 0),
+  userEmail: String(json?.userEmail ?? ''),
+  userFirstName: String(json?.userFirstName ?? ''),
+  userLastName: String(json?.userLastName ?? ''),
+  role: String(json?.role ?? 'MEMBER'),
+  status: String(json?.status ?? 'PENDING'),
+  joinedAt: String(json?.joinedAt ?? ''),
+});
+
 export const announcementFromJson = (json: any): ActivityAnnouncement => ({
   id: Number(json?.id ?? 0),
   title: String(json?.title ?? ''),
@@ -119,3 +150,6 @@ export const chatPostResultFromJson = (json: any): ActivityChatPostResult => ({
   message: chatMessageFromJson(json?.message ?? {}),
   autoReply: json?.autoReply ? chatMessageFromJson(json.autoReply) : null,
 });
+
+export const listingKey = (item: ActivityListing): string =>
+  item.kind === 'event' ? `event-${item.event.id}` : `group-${item.club.id}`;

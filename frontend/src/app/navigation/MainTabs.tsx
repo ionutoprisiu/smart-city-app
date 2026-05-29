@@ -82,7 +82,7 @@ export const MainTabs: React.FC = () => {
         name="Activities"
         component={ActivitiesStack}
         options={{
-          title: 'Activities',
+          title: 'Community',
           headerShown: false,
           tabBarIcon: activitiesTabIcon,
         }}

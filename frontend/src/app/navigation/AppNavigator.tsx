@@ -42,7 +42,6 @@ export const AppNavigator: React.FC = () => {
   if (isInitializing) return <SplashScreen />;
 
   const isAuthenticated = currentUser != null;
-  const needsVerification = isAuthenticated && currentUser.isVerified !== true;
 
   const navTheme = buildNavTheme(theme, theme.isDark ? DarkTheme : DefaultTheme);
 
@@ -63,12 +62,6 @@ export const AppNavigator: React.FC = () => {
             component={AuthStack}
             options={{ headerShown: false }}
           />
-        ) : needsVerification ? (
-          <RootStack.Screen
-            name="Verification"
-            component={VerificationScreen}
-            options={{ title: 'Identity verification' }}
-          />
         ) : (
           <>
             <RootStack.Screen
@@ -77,9 +70,9 @@ export const AppNavigator: React.FC = () => {
               options={{ headerShown: false }}
             />
             <RootStack.Screen
-              name="Verification"
+              name="BecomeOrganizer"
               component={VerificationScreen}
-              options={{ title: 'Identity verification' }}
+              options={{ title: 'Become an organizer' }}
             />
           </>
         )}
