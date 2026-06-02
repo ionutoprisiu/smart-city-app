@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, Form, UploadFile
 
-from app.schemas import VerificationResponse
+from app.schemas import VerificationMetadataResponse, VerificationResponse
 from app.services import verify_identity
 
 router = APIRouter(tags=["verification"])
@@ -17,15 +17,15 @@ async def verify(
     idCardImage: UploadFile = File(...),
     selfieImage: UploadFile = File(...),
 ) -> VerificationResponse:
-    id_card_bytes = await idCardImage.read()
-    selfie_bytes = await selfieImage.read()
-    result = verify_identity(id_card_bytes=id_card_bytes, selfie_bytes=selfie_bytes)
+    result = verify_identity(
+        id_card_bytes=await idCardImage.read(),
+        selfie_bytes=await selfieImage.read(),
+    )
 
     return VerificationResponse(
         userId=userId,
-        status=result.status,
+        status=result.status.value,
         score=result.score,
         reason=result.reason,
-        ocrData=result.ocr_data,
+        metadata=VerificationMetadataResponse.model_validate(result.metadata.as_dict()),
     )
-

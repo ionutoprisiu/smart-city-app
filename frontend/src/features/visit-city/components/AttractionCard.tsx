@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { AddressService } from '@shared/services/addressService';
 import { useTheme } from '@theme';
-import { Attraction, categoryIcon } from '../types';
+import { Attraction, categoryIcon, categoryLabel } from '../types';
 
 type Props = {
   attraction: Attraction;
@@ -19,62 +18,25 @@ export const AttractionCard: React.FC<Props> = ({
   onPress,
 }) => {
   const theme = useTheme();
-  const [street, setStreet] = useState('Loading street...');
-  const themedStyles = {
-    cardBg: {
-      backgroundColor: isSelected
-        ? theme.colors.primaryContainer + '8C'
-        : theme.colors.surfaceContainerHighest + '8C',
-      borderRadius: theme.radius.round,
-      padding: theme.spacing.medium,
-    },
-    cardPressed: { opacity: 0.92 },
-    cardDefault: { opacity: 1 },
-    iconBox: {
-      backgroundColor: theme.colors.primaryContainer + 'A6',
-      borderRadius: theme.radius.large,
-    },
-    title: { color: theme.colors.onSurface, lineHeight: 18 },
-    subtitle: {
-      color: theme.colors.onSurfaceVariant,
-      marginTop: 4,
-      lineHeight: 18,
-    },
-    selectSelectedBg: { backgroundColor: theme.colors.primary },
-    selectDefaultBg: { backgroundColor: theme.colors.surfaceContainerLow },
-    selectPressed: { opacity: 0.85 },
-    selectDefault: { opacity: 1 },
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    AddressService.streetFromCoordinates(
-      attraction.latitude,
-      attraction.longitude,
-      attraction.city,
-    ).then(
-      (value) => {
-        if (!cancelled) setStreet(value);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [attraction.latitude, attraction.longitude, attraction.city]);
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        themedStyles.cardBg,
-        pressed ? themedStyles.cardPressed : themedStyles.cardDefault,
+        {
+          backgroundColor: isSelected
+            ? theme.colors.primaryContainer + '66'
+            : theme.colors.surfaceContainerHighest,
+          borderColor: isSelected ? theme.colors.primary : theme.colors.outlineVariant + '80',
+          opacity: pressed ? 0.92 : 1,
+        },
       ]}
     >
       <View
         style={[
           styles.iconBox,
-          themedStyles.iconBox,
+          { backgroundColor: theme.colors.primaryContainer + '99' },
         ]}
       >
         <Text style={styles.iconEmoji}>{categoryIcon(attraction.category)}</Text>
@@ -82,31 +44,33 @@ export const AttractionCard: React.FC<Props> = ({
 
       <View style={styles.body}>
         <Text
-          style={[
-            theme.typography.titleSmall,
-            themedStyles.title,
-          ]}
-          numberOfLines={2}
+          style={[theme.typography.titleSmall, { color: theme.colors.onSurface }]}
+          numberOfLines={1}
         >
           {attraction.name}
         </Text>
         <Text
           style={[
-            theme.typography.bodySmall,
-            themedStyles.subtitle,
+            theme.typography.labelMedium,
+            { color: theme.colors.onSurfaceVariant, marginTop: 2 },
           ]}
-          numberOfLines={2}
+          numberOfLines={1}
         >
-          {street}
+          {categoryLabel(attraction.category)}
         </Text>
       </View>
 
       <Pressable
         onPress={onToggleSelection}
+        hitSlop={6}
         style={({ pressed }) => [
           styles.selectButton,
-          isSelected ? themedStyles.selectSelectedBg : themedStyles.selectDefaultBg,
-          pressed ? themedStyles.selectPressed : themedStyles.selectDefault,
+          {
+            backgroundColor: isSelected
+              ? theme.colors.primary
+              : theme.colors.surfaceContainerLow,
+            opacity: pressed ? 0.85 : 1,
+          },
         ]}
       >
         <Icon
@@ -122,25 +86,31 @@ export const AttractionCard: React.FC<Props> = ({
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
   },
   iconBox: {
-    width: 56,
-    height: 56,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   iconEmoji: {
-    fontSize: 26,
+    fontSize: 22,
   },
   body: {
     flex: 1,
+    minWidth: 0,
   },
   selectButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,

@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Chat Service"
-    database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/licenta_db"
+    database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/smart_city_db"
     jwt_secret_key: str = "dev-only-change-me-use-openssl-rand-hex-32"
     jwt_algorithm: str = "HS256"
     cors_origins_raw: str = "*"

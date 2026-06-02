@@ -35,6 +35,14 @@ type PickedImage = {
   mime?: string;
 };
 
+const PICKER_LIMITS = {
+  mediaType: 'photo' as const,
+  quality: 0.7 as const,
+  maxWidth: 1280,
+  maxHeight: 1280,
+  includeBase64: false,
+};
+
 const fileFromResponse = (response: ImagePickerResponse): PickedImage | null => {
   const asset = response?.assets?.[0];
   if (!asset || !asset.uri) return null;
@@ -50,7 +58,8 @@ export const VerificationScreen: React.FC = () => {
     errorMessage,
     verificationScore,
     verificationReason,
-    verificationOcrData,
+    verificationCanSubmit,
+    verificationBlockedReason,
     refreshVerificationStatus,
     submitVerification,
   } = useAuthStore();
@@ -59,12 +68,20 @@ export const VerificationScreen: React.FC = () => {
   const [selfieImage, setSelfieImage] = useState<PickedImage | null>(null);
 
   const status: VerificationStatus = currentUser?.verificationStatus ?? 'notSubmitted';
+  const uploadLocked = !verificationCanSubmit;
 
   useEffect(() => {
     refreshVerificationStatus();
   }, [refreshVerificationStatus]);
 
+  const guardUpload = () => {
+    if (!uploadLocked) return true;
+    Alert.alert('Upload locked', verificationBlockedReason ?? 'You cannot upload new photos right now.');
+    return false;
+  };
+
   const showSourcePicker = (kind: 'idCard' | 'selfie') => {
+    if (!guardUpload()) return;
     Alert.alert(
       kind === 'idCard' ? 'ID card image' : 'Selfie image',
       'Choose source',
@@ -77,10 +94,10 @@ export const VerificationScreen: React.FC = () => {
   };
 
   const captureFromCamera = async (kind: 'idCard' | 'selfie') => {
+    if (!guardUpload()) return;
     const response = await launchCamera({
-      mediaType: 'photo',
+      ...PICKER_LIMITS,
       cameraType: kind === 'selfie' ? 'front' : 'back',
-      quality: 0.8,
       saveToPhotos: false,
     });
     const file = fileFromResponse(response);
@@ -90,10 +107,8 @@ export const VerificationScreen: React.FC = () => {
   };
 
   const pickFromGallery = async (kind: 'idCard' | 'selfie') => {
-    const response = await launchImageLibrary({
-      mediaType: 'photo',
-      quality: 0.8,
-    });
+    if (!guardUpload()) return;
+    const response = await launchImageLibrary(PICKER_LIMITS);
     const file = fileFromResponse(response);
     if (!file) return;
     if (kind === 'idCard') setIdCardImage(file);
@@ -101,12 +116,14 @@ export const VerificationScreen: React.FC = () => {
   };
 
   const submit = async () => {
-    if (idCardImage == null || selfieImage == null) return;
+    if (uploadLocked || idCardImage == null || selfieImage == null) return;
     const ok = await submitVerification({ idCardImage, selfieImage });
     if (ok) {
+      setIdCardImage(null);
+      setSelfieImage(null);
       Alert.alert(
         'Documents submitted',
-        'Your ID and selfie were sent for review. Once approved, you can become an organizer from Activities.',
+        'Your ID and selfie were sent for review. You cannot upload again until an admin responds.',
       );
       navigation.goBack();
     }
@@ -127,22 +144,14 @@ export const VerificationScreen: React.FC = () => {
     }
   })();
 
-  const cnp = verificationOcrData?.cnp ? String(verificationOcrData.cnp) : null;
-  const serial = verificationOcrData?.serial ? String(verificationOcrData.serial) : null;
-  const preview = verificationOcrData?.rawTextPreview
-    ? String(verificationOcrData.rawTextPreview)
-    : null;
-
-  const maskCnp = (value: string) => {
-    if (value.length < 6) return value;
-    return `${value.slice(0, 2)}********${value.slice(-4)}`;
-  };
+  const lockedOpacity = uploadLocked ? 0.45 : 1;
 
   const themedStyles = {
     rootBg: { backgroundColor: theme.colors.surface },
     contentPad: { padding: theme.spacing.screen },
     introText: { color: theme.colors.onSurface },
     statusText: { color: statusColor, marginTop: 8 },
+    lockedText: { color: theme.colors.onSurfaceVariant, marginTop: 8 },
     spacer18: { height: 18 },
     spacer12: { height: 12 },
     analysisCard: {
@@ -151,7 +160,6 @@ export const VerificationScreen: React.FC = () => {
     },
     analysisTitle: { color: theme.colors.onSurface },
     analysisValue: { color: theme.colors.onSurface },
-    analysisPreview: { color: theme.colors.onSurfaceVariant, marginTop: 6 },
     spacer8: { height: 8 },
     spacer16: { height: 16 },
     spacer10: { height: 10 },
@@ -164,54 +172,43 @@ export const VerificationScreen: React.FC = () => {
           contentContainerStyle={themedStyles.contentPad}
           keyboardShouldPersistTaps="handled"
         >
-          <Text
-            style={[
-              theme.typography.titleMedium,
-              themedStyles.introText,
-            ]}
-          >
-            To become an organizer, upload your ID card and a matching selfie. After approval, use Activities → Become organizer.
+          <Text style={[theme.typography.titleMedium, themedStyles.introText]}>
+            To become an organizer, upload your ID card and a matching selfie. After admin approval, use Activities → Become organizer.
           </Text>
-          <Text
-            style={[
-              theme.typography.bodyMedium,
-              themedStyles.statusText,
-            ]}
-          >
+          <Text style={[theme.typography.bodyMedium, themedStyles.statusText]}>
             Status: {verificationStatusLabel(status)}
           </Text>
+          {uploadLocked && verificationBlockedReason ? (
+            <Text style={[theme.typography.bodyMedium, themedStyles.lockedText]}>
+              {verificationBlockedReason}
+            </Text>
+          ) : null}
 
           <View style={themedStyles.spacer18} />
-          <ImagePickCard
-            title="ID card image"
-            file={idCardImage}
-            onPickFromGallery={() => pickFromGallery('idCard')}
-            onCaptureFromCamera={() => showSourcePicker('idCard')}
-          />
-          <View style={themedStyles.spacer12} />
-          <ImagePickCard
-            title="Selfie image"
-            file={selfieImage}
-            onPickFromGallery={() => pickFromGallery('selfie')}
-            onCaptureFromCamera={() => showSourcePicker('selfie')}
-          />
+          <View style={{ opacity: lockedOpacity }}>
+            <ImagePickCard
+              title="ID card image"
+              file={idCardImage}
+              disabled={uploadLocked}
+              onPickFromGallery={() => pickFromGallery('idCard')}
+              onCaptureFromCamera={() => showSourcePicker('idCard')}
+            />
+            <View style={themedStyles.spacer12} />
+            <ImagePickCard
+              title="Selfie image"
+              file={selfieImage}
+              disabled={uploadLocked}
+              onPickFromGallery={() => pickFromGallery('selfie')}
+              onCaptureFromCamera={() => showSourcePicker('selfie')}
+            />
+          </View>
 
           <View style={themedStyles.spacer12} />
           {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
 
           {verificationReason || verificationScore != null ? (
-            <View
-              style={[
-                styles.analysisCard,
-                themedStyles.analysisCard,
-              ]}
-            >
-              <Text
-                style={[
-                  theme.typography.titleSmall,
-                  themedStyles.analysisTitle,
-                ]}
-              >
+            <View style={[styles.analysisCard, themedStyles.analysisCard]}>
+              <Text style={[theme.typography.titleSmall, themedStyles.analysisTitle]}>
                 Analysis details
               </Text>
               <View style={themedStyles.spacer8} />
@@ -223,27 +220,6 @@ export const VerificationScreen: React.FC = () => {
               {verificationReason ? (
                 <Text style={[theme.typography.bodyMedium, themedStyles.analysisValue]}>
                   Reason: {verificationReason}
-                </Text>
-              ) : null}
-              {cnp ? (
-                <Text style={[theme.typography.bodyMedium, themedStyles.analysisValue]}>
-                  Detected CNP: {maskCnp(cnp)}
-                </Text>
-              ) : null}
-              {serial ? (
-                <Text style={[theme.typography.bodyMedium, themedStyles.analysisValue]}>
-                  Detected serial: {serial}
-                </Text>
-              ) : null}
-              {preview ? (
-                <Text
-                  style={[
-                    theme.typography.bodySmall,
-                    themedStyles.analysisPreview,
-                  ]}
-                  numberOfLines={3}
-                >
-                  OCR preview: {preview}
                 </Text>
               ) : null}
             </View>
@@ -261,7 +237,7 @@ export const VerificationScreen: React.FC = () => {
           <AppButton
             label="Submit for organizer review"
             iconName="verified-user"
-            disabled={!idCardImage || !selfieImage || isLoading}
+            disabled={uploadLocked || !idCardImage || !selfieImage || isLoading}
             onPress={submit}
           />
         </ScrollView>
@@ -273,6 +249,7 @@ export const VerificationScreen: React.FC = () => {
 type ImagePickCardProps = {
   title: string;
   file: PickedImage | null;
+  disabled?: boolean;
   onPickFromGallery: () => void;
   onCaptureFromCamera: () => void;
 };
@@ -280,31 +257,31 @@ type ImagePickCardProps = {
 const ImagePickCard: React.FC<ImagePickCardProps> = ({
   title,
   file,
+  disabled = false,
   onPickFromGallery,
   onCaptureFromCamera,
 }) => {
   const theme = useTheme();
+  const iconColor = disabled ? theme.colors.outline : theme.colors.onSurfaceVariant;
+  const galleryColor = disabled ? theme.colors.outline : theme.colors.primary;
+
   const themedStyles = {
-    cardBorder: { borderColor: theme.colors.outlineVariant },
-    fileNameText: { color: theme.colors.onSurface, flex: 1 },
-    galleryText: { color: theme.colors.primary },
+    cardBorder: {
+      borderColor: disabled ? theme.colors.outlineVariant : theme.colors.outlineVariant,
+      backgroundColor: disabled ? theme.colors.surfaceContainerHighest + '44' : 'transparent',
+    },
+    fileNameText: { color: disabled ? theme.colors.outline : theme.colors.onSurface, flex: 1 },
+    galleryText: { color: galleryColor },
   };
+
   return (
-    <View
-      style={[
-        styles.imageCard,
-        themedStyles.cardBorder,
-      ]}
-    >
+    <View style={[styles.imageCard, themedStyles.cardBorder]}>
       {file?.uri ? (
         <Image source={{ uri: file.uri }} style={styles.preview} />
       ) : null}
       <View style={styles.imageRow}>
         <Text
-          style={[
-            theme.typography.bodyMedium,
-            themedStyles.fileNameText,
-          ]}
+          style={[theme.typography.bodyMedium, themedStyles.fileNameText]}
           numberOfLines={1}
         >
           {file == null
@@ -312,25 +289,23 @@ const ImagePickCard: React.FC<ImagePickCardProps> = ({
             : (file.fileName ?? file.uri.split('/').pop() ?? title)}
         </Text>
         <Pressable
-          onPress={onCaptureFromCamera}
+          onPress={disabled ? undefined : onCaptureFromCamera}
+          disabled={disabled}
           hitSlop={8}
           style={({ pressed }) => ({
             padding: 8,
-            opacity: pressed ? 0.7 : 1,
+            opacity: disabled ? 1 : pressed ? 0.7 : 1,
           })}
         >
-          <Icon
-            name="photo-camera"
-            size={22}
-            color={theme.colors.onSurfaceVariant}
-          />
+          <Icon name="photo-camera" size={22} color={iconColor} />
         </Pressable>
         <Pressable
-          onPress={onPickFromGallery}
+          onPress={disabled ? undefined : onPickFromGallery}
+          disabled={disabled}
           style={({ pressed }) => ({
             paddingHorizontal: 12,
             paddingVertical: 8,
-            opacity: pressed ? 0.7 : 1,
+            opacity: disabled ? 1 : pressed ? 0.7 : 1,
           })}
         >
           <Text style={[theme.typography.labelLarge, themedStyles.galleryText]}>

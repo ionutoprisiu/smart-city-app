@@ -8,6 +8,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect } from 'react';
 import { SplashScreen } from '@features/auth/screens/SplashScreen';
 import { useAuthStore } from '@features/auth/store/authStore';
+import { EditPreferencesScreen } from '@features/preferences/screens/EditPreferencesScreen';
+import { OnboardingScreen } from '@features/preferences/screens/OnboardingScreen';
+import { usePreferencesStore } from '@features/preferences/store/preferencesStore';
 import { VerificationScreen } from '@features/verification/screens/VerificationScreen';
 import { useTheme } from '@theme';
 import { AuthStack } from './AuthStack';
@@ -34,14 +37,31 @@ const buildNavTheme = (
 export const AppNavigator: React.FC = () => {
   const theme = useTheme();
   const { initialize, isInitializing, currentUser } = useAuthStore();
+  const {
+    status: prefsStatus,
+    completed: prefsCompleted,
+    load: loadPreferences,
+    reset: resetPreferences,
+  } = usePreferencesStore();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
-  if (isInitializing) return <SplashScreen />;
-
   const isAuthenticated = currentUser != null;
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadPreferences();
+    } else {
+      resetPreferences();
+    }
+  }, [isAuthenticated, loadPreferences, resetPreferences]);
+
+  if (isInitializing) return <SplashScreen />;
+  if (isAuthenticated && prefsStatus !== 'ready') return <SplashScreen />;
+
+  const needsOnboarding = isAuthenticated && !prefsCompleted;
 
   const navTheme = buildNavTheme(theme, theme.isDark ? DarkTheme : DefaultTheme);
 
@@ -62,6 +82,12 @@ export const AppNavigator: React.FC = () => {
             component={AuthStack}
             options={{ headerShown: false }}
           />
+        ) : needsOnboarding ? (
+          <RootStack.Screen
+            name="Onboarding"
+            component={OnboardingScreen}
+            options={{ headerShown: false }}
+          />
         ) : (
           <>
             <RootStack.Screen
@@ -73,6 +99,11 @@ export const AppNavigator: React.FC = () => {
               name="BecomeOrganizer"
               component={VerificationScreen}
               options={{ title: 'Become an organizer' }}
+            />
+            <RootStack.Screen
+              name="EditPreferences"
+              component={EditPreferencesScreen}
+              options={{ title: 'Your preferences' }}
             />
           </>
         )}

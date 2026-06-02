@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
+from app.models.enums import Role
+from app.models.user import User
 
 http_bearer = HTTPBearer(auto_error=False)
 
@@ -58,3 +60,14 @@ def get_optional_current_user_id(
         return int(sub)
     except (TypeError, ValueError):
         return None
+
+
+def require_admin_user_id(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> int:
+    """Require the authenticated user to have the ADMIN role."""
+    user = db.get(User, user_id)
+    if user is None or user.role != Role.ADMIN.value:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user_id

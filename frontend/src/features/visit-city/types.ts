@@ -108,6 +108,7 @@ export type Attraction = {
   city: string;
   category: AttractionCategory;
   imageUrl?: string | null;
+  importanceScore: number;
   isActive: boolean;
 };
 
@@ -120,6 +121,7 @@ export const attractionFromJson = (json: any): Attraction => ({
   city: String(json?.city ?? ''),
   category: categoryFromString(json?.category?.toString()),
   imageUrl: typeof json?.imageUrl === 'string' ? json.imageUrl : null,
+  importanceScore: Number(json?.importanceScore ?? 0),
   isActive: typeof json?.isActive === 'boolean' ? json.isActive : true,
 });
 

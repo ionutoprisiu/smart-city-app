@@ -1,0 +1,28 @@
+{
+  "description": "Fixed Cluj-Napoca tourist attractions used to benchmark route optimization (ACO vs nearest-neighbor vs brute-force). Coordinates are approximate WGS84 (lat, lon). The start point anchors every tour at index 0.",
+  "start": { "name": "Piața Unirii", "latitude": 46.7693, "longitude": 23.5907 },
+  "pool": [
+    { "id": 1, "name": "Cetățuia", "latitude": 46.7712, "longitude": 23.5836 },
+    { "id": 2, "name": "Parcul Central Simion Bărnuțiu", "latitude": 46.7693, "longitude": 23.5793 },
+    { "id": 3, "name": "Cluj Arena", "latitude": 46.7682, "longitude": 23.5718 },
+    { "id": 4, "name": "Grădina Botanică Alexandru Borza", "latitude": 46.7639, "longitude": 23.5876 },
+    { "id": 5, "name": "Teatrul Național Lucian Blaga", "latitude": 46.7704, "longitude": 23.5979 },
+    { "id": 6, "name": "Catedrala Mitropolitană", "latitude": 46.7706, "longitude": 23.5969 },
+    { "id": 7, "name": "Muzeul Etnografic al Transilvaniei", "latitude": 46.7728, "longitude": 23.5841 },
+    { "id": 8, "name": "Biserica Sfântul Mihail", "latitude": 46.7693, "longitude": 23.5897 },
+    { "id": 9, "name": "Universitatea Babeș-Bolyai (Sediu central)", "latitude": 46.7657, "longitude": 23.5897 },
+    { "id": 10, "name": "Parcul Etnografic Romulus Vuia", "latitude": 46.7884, "longitude": 23.5605 },
+    { "id": 11, "name": "Lacul Gheorgheni (Parcul Iuliu Prodan)", "latitude": 46.7745, "longitude": 23.6308 },
+    { "id": 12, "name": "Turnul Pompierilor", "latitude": 46.7733, "longitude": 23.5905 },
+    { "id": 13, "name": "Palatul Banffy (Muzeul de Artă)", "latitude": 46.7699, "longitude": 23.5928 },
+    { "id": 14, "name": "Bastionul Croitorilor", "latitude": 46.7681, "longitude": 23.5946 },
+    { "id": 15, "name": "Mănăstirea Calvaria (Mănăștur)", "latitude": 46.7566, "longitude": 23.5490 }
+  ],
+  "sets": [
+    { "name": "small-5", "attractionIds": [1, 2, 3, 4, 8] },
+    { "name": "medium-8", "attractionIds": [1, 2, 3, 4, 5, 6, 8, 13] },
+    { "name": "medium-10", "attractionIds": [1, 2, 3, 4, 5, 6, 7, 8, 12, 13] },
+    { "name": "large-12", "attractionIds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14] },
+    { "name": "large-15", "attractionIds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] }
+  ]
+}

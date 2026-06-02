@@ -11,12 +11,13 @@ Full-stack thesis project for smart tourism in Cluj-Napoca:
 ## Repository Layout
 
 ```
-licenta-app/
+smart-city-app/
 ├── backend/               # FastAPI API gateway + business logic (port 8080)
 ├── aco-service/           # FastAPI microservice for route optimization (port 8000)
 ├── chat-service/          # FastAPI + Socket.IO for activity chat + LLM auto-reply (port 8002)
 ├── verification-service/  # FastAPI microservice for identity verification (port 8090)
 ├── frontend/              # React Native (iOS) client app
+├── admin-web/             # Vite + React admin panel (port 8095)
 ├── osrm-service/          # OSRM graph data + prepare (see data/)
 └── docker-compose.yml     # Full local stack
 ```
@@ -38,7 +39,7 @@ Modular FastAPI service with layers:
 Primary responsibilities:
 
 - auth (`/api/auth/*`)
-- visit-city listing/filter/live discovery
+- visit-city listing/filter; full Cluj catalog synced from Overpass on backend startup (`SYNC_ATTRACTIONS_ON_STARTUP`, default `true`)
 - route optimization orchestration (`backend -> aco-service`)
 - verification orchestration (`backend -> verification-service`)
 - activities (events/clubs); support chat via `chat-service` (REST history + Socket.IO + in-process LLM auto-reply)
@@ -54,11 +55,17 @@ FastAPI microservice that computes optimized route order:
 
 ### Verification Service (`verification-service`)
 
-FastAPI microservice for identity checks:
+FastAPI microservice for face-only identity checks:
 
-- face comparison between ID portrait and selfie (`insightface`)
-- OCR text extraction preview (`pytesseract`)
-- decision thresholds: approved / manualReview / rejected
+- compares ID portrait with selfie (`insightface`)
+- returns score + status: `APPROVED` / `MANUAL_REVIEW` / `REJECTED`
+
+Layout:
+
+- `app/models.py` — result types and thresholds input
+- `app/image_utils.py` — decode and preprocess images
+- `app/face.py` — detection, embedding extraction
+- `app/services/verification_service.py` — orchestration
 
 ### Chat Service (`chat-service`)
 
@@ -76,6 +83,15 @@ React Native + TypeScript app (iOS-first):
 - profile and verification screens
 - shared API client, storage, theming, validators
 
+### Admin Web (`admin-web`)
+
+Vite + React panel for operators:
+
+- login with seeded admin account (`admin@admin.com` / `ADMIN_USER_PASSWORD`)
+- review identity verifications in `MANUAL_REVIEW` (approve / reject)
+- optional user list + promote verified users to organizer
+- served on port **8095** (nginx proxies `/api` → backend)
+
 ## API Overview
 
 ### Backend (8080)
@@ -87,6 +103,11 @@ React Native + TypeScript app (iOS-first):
 - `POST /api/visit-city/optimize`
 - `POST /api/verification/submit`
 - `GET /api/verification/status/{user_id}`
+- `GET /api/admin/verifications/pending` (admin JWT)
+- `POST /api/admin/verifications/{user_id}/approve` (admin JWT)
+- `POST /api/admin/verifications/{user_id}/reject` (admin JWT)
+- `GET /api/admin/users` (admin JWT)
+- `POST /api/admin/users/{user_id}/promote-organizer` (admin JWT)
 - `GET /health`
 
 ### Chat Service (8002)
@@ -126,7 +147,7 @@ Root `.env` controls PostgreSQL and OSRM dataset names (`OSM_FILE` / `OSM_DATASE
 ### 2) Start full services stack
 
 ```bash
-docker compose --profile with-db up -d postgres osrm-foot osrm-driving aco-service verification-service chat-service backend
+docker compose up -d --build
 ```
 
 Optional OSRM prepare profile (if datasets are not already generated):
@@ -142,6 +163,15 @@ curl http://localhost:8080/health
 curl http://localhost:8000/health
 curl http://localhost:8002/health
 curl http://localhost:8090/health
+curl http://localhost:8095/
+```
+
+Admin panel: open `http://localhost:8095` and sign in with the seeded admin credentials from `.env` (`ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD`).
+
+Local dev (hot reload, proxies API to backend on 8080):
+
+```bash
+cd admin-web && npm install && npm run dev
 ```
 
 ## Run Frontend (iOS)
@@ -175,8 +205,8 @@ Backend / chat (pytest inside Docker, same images as compose):
 ```bash
 docker compose build backend chat-service
 docker compose up -d backend chat-service
-docker exec licenta-backend pytest tests/ -q
-docker exec licenta-chat python -m pytest tests/ -q
+docker exec smart-city-backend pytest tests/ -q
+docker exec smart-city-chat python -m pytest tests/ -q
 ```
 
 ## Notes

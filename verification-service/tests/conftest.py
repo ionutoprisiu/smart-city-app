@@ -10,4 +10,3 @@ def client() -> TestClient:
     app = main_module.create_app()
     with TestClient(app) as test_client:
         yield test_client
-

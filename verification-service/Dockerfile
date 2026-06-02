@@ -2,15 +2,15 @@ FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# Tesseract is required for OCR processing.
+# OpenCV runtime libraries for InsightFace.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         cmake \
         pkg-config \
-        tesseract-ocr \
         libgl1 \
         libgomp1 \
+        libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

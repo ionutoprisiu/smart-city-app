@@ -21,7 +21,11 @@ type AuthState = {
   errorMessage: string | null;
   verificationScore: number | null;
   verificationReason: string | null;
-  verificationOcrData: Record<string, unknown> | null;
+  verificationMetadata: Record<string, unknown> | null;
+  verificationCanSubmit: boolean;
+  verificationBlockedReason: string | null;
+  canAccessOrganizerFlow: boolean;
+  organizerFlowBlockedReason: string | null;
 
   initialize: () => Promise<void>;
   login: (request: LoginRequest) => Promise<boolean>;
@@ -42,7 +46,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   errorMessage: null,
   verificationScore: null,
   verificationReason: null,
-  verificationOcrData: null,
+  verificationMetadata: null,
+  verificationCanSubmit: true,
+  verificationBlockedReason: null,
+  canAccessOrganizerFlow: true,
+  organizerFlowBlockedReason: null,
 
   async initialize() {
     set({ isInitializing: true });
@@ -96,6 +104,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
       Logger.info(`Login successful: ${response.email}`);
+      await get().refreshVerificationStatus();
       return true;
     } catch (e) {
       set({ isLoading: false, errorMessage: extractErrorMessage(e) });
@@ -122,6 +131,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
       Logger.info(`Registration successful: ${response.email}`);
+      await get().refreshVerificationStatus();
       return true;
     } catch (e) {
       set({ isLoading: false, errorMessage: extractErrorMessage(e) });
@@ -137,7 +147,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         errorMessage: null,
         verificationScore: null,
         verificationReason: null,
-        verificationOcrData: null,
+        verificationMetadata: null,
+        verificationCanSubmit: true,
+        verificationBlockedReason: null,
+        canAccessOrganizerFlow: true,
+        organizerFlowBlockedReason: null,
       });
       Logger.info('User logged out');
     } catch (e) {
@@ -163,7 +177,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({
           verificationScore: status.score,
           verificationReason: status.reason,
-          verificationOcrData: status.ocrData,
+          verificationMetadata: status.metadata,
+          verificationCanSubmit: status.canSubmit,
+          verificationBlockedReason: status.submitBlockedReason,
+          canAccessOrganizerFlow: status.canAccessOrganizerFlow,
+          organizerFlowBlockedReason: status.organizerFlowBlockedReason,
         });
       } catch {
         // keep submit response data when status fetch fails.
@@ -178,6 +196,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         },
         verificationScore: result.score,
         verificationReason: result.reason,
+        verificationCanSubmit: false,
+        verificationBlockedReason: 'Your documents are under admin review. Wait for a decision.',
+        canAccessOrganizerFlow: false,
+        organizerFlowBlockedReason: 'Your documents are under admin review. Wait for a decision.',
         isLoading: false,
       });
       await StorageService.saveUserIsVerified(isApproved);
@@ -197,15 +219,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         currentUser: {
           ...user,
-          isVerified: status.status === 'approved',
+          role: status.role,
+          isVerified: status.isVerified,
           verificationStatus: status.status,
         },
         verificationScore: status.score,
         verificationReason: status.reason,
-        verificationOcrData: status.ocrData,
+        verificationMetadata: status.metadata,
+        verificationCanSubmit: status.canSubmit,
+        verificationBlockedReason: status.submitBlockedReason,
+        canAccessOrganizerFlow: status.canAccessOrganizerFlow,
+        organizerFlowBlockedReason: status.organizerFlowBlockedReason,
       });
-      await StorageService.saveUserIsVerified(status.status === 'approved');
+      await StorageService.saveUserIsVerified(status.isVerified);
       await StorageService.saveUserVerificationStatus(status.status);
+      await StorageService.saveUserRole(status.role);
     } catch {
       // Non-blocking refresh.
     }

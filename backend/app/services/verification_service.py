@@ -7,16 +7,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.integrations.verification_client import VerificationServiceError, submit
-from app.models.enums import VerificationStatus
+from app.models.enums import Role, VerificationStatus
 from app.models.user import User
 from app.schemas.verification import VerificationStatusResponse, VerificationSubmitResponse
+from app.services import verification_storage
+from app.services.verification_access import (
+    ensure_can_submit,
+    organizer_flow_eligibility,
+    parse_stored_status,
+    submit_eligibility,
+)
 
 
-def _status_from_remote(raw: str) -> VerificationStatus:
-    try:
-        return VerificationStatus(raw)
-    except ValueError:
-        return VerificationStatus.REJECTED
+def _status_from_microservice(raw: str) -> VerificationStatus:
+    """Map microservice output to a stored status; never auto-approve on submit."""
+    status = parse_stored_status(raw)
+    if status == VerificationStatus.APPROVED:
+        return VerificationStatus.MANUAL_REVIEW
+    return status
 
 
 async def submit_verification(
@@ -28,6 +36,7 @@ async def submit_verification(
     selfie_bytes: bytes,
 ) -> VerificationSubmitResponse:
     user = _get_user_or_raise(db, user_id)
+    ensure_can_submit(user)
 
     try:
         data: dict[str, Any] = await submit(
@@ -40,16 +49,24 @@ async def submit_verification(
     except VerificationServiceError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    status = _status_from_remote(str(data.get("status", VerificationStatus.REJECTED.value)))
+    status = _status_from_microservice(str(data.get("status", VerificationStatus.REJECTED.value)))
     score = data.get("score")
     reason = str(data.get("reason", "Verification processed"))
-    ocr_data = data.get("ocrData")
+    metadata = data.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = data.get("ocrData") if isinstance(data.get("ocrData"), dict) else None
+
+    verification_storage.save_verification_images(user_id, id_card_bytes, selfie_bytes)
+    id_card_url, selfie_url = verification_storage.document_urls(user_id)
 
     user.verification_status = status.value
     user.verification_score = float(score) if score is not None else None
     user.verification_reason = reason
-    user.id_document_ocr_json = json.dumps(ocr_data) if isinstance(ocr_data, dict) else None
-    user.is_verified = status == VerificationStatus.APPROVED
+    user.id_document_ocr_json = json.dumps(metadata) if isinstance(metadata, dict) else None
+    user.id_card_image_url = id_card_url
+    user.face_image_url = selfie_url
+    user.is_verified = False
+    user.is_approved = False
     db.commit()
 
     return VerificationSubmitResponse(
@@ -62,13 +79,21 @@ async def submit_verification(
 
 def get_verification_status(db: Session, user_id: int) -> VerificationStatusResponse:
     user = _get_user_or_raise(db, user_id)
+    can_submit, blocked_reason = submit_eligibility(user)
+    can_access_flow, flow_blocked_reason = organizer_flow_eligibility(user)
 
     return VerificationStatusResponse(
         userId=user.id,
-        status=_status_from_remote(user.verification_status),
+        status=parse_stored_status(user.verification_status),
+        role=Role(user.role),
+        isVerified=user.is_verified,
         score=user.verification_score,
         reason=user.verification_reason,
-        ocrData=_parse_ocr_json(user.id_document_ocr_json),
+        metadata=_parse_metadata_json(user.id_document_ocr_json),
+        canSubmit=can_submit,
+        submitBlockedReason=blocked_reason,
+        canAccessOrganizerFlow=can_access_flow,
+        organizerFlowBlockedReason=flow_blocked_reason,
     )
 
 
@@ -79,7 +104,7 @@ def _get_user_or_raise(db: Session, user_id: int) -> User:
     return user
 
 
-def _parse_ocr_json(raw: str | None) -> dict[str, Any] | None:
+def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
     if not raw:
         return None
     try:

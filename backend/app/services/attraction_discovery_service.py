@@ -100,10 +100,47 @@ def _parse_element(element: Mapping[str, Any]) -> TouristAttraction | None:
         city=CITY,
         category=category.value,
         estimated_visit_time=_estimate_visit_time(category),
+        importance_score=_compute_importance(tags, category),
         is_active=True,
         created_at=utc_now(),
         updated_at=utc_now(),
     )
+
+
+# Base relevance per category (touristic value); food/shopping rank lower.
+_CATEGORY_BASE_SCORE: dict[AttractionCategory, float] = {
+    AttractionCategory.MUSEUM: 5.0,
+    AttractionCategory.FORTRESS: 5.0,
+    AttractionCategory.MONUMENT: 4.0,
+    AttractionCategory.THEATER: 4.0,
+    AttractionCategory.CHURCH: 3.0,
+    AttractionCategory.PARK: 3.0,
+    AttractionCategory.SQUARE: 3.0,
+    AttractionCategory.LIBRARY: 2.0,
+    AttractionCategory.HOTEL: 1.0,
+    AttractionCategory.SHOP: 1.0,
+    AttractionCategory.RESTAURANT: 0.5,
+    AttractionCategory.CAFE: 0.5,
+    AttractionCategory.OTHER: 1.0,
+}
+
+
+def _compute_importance(tags: dict[str, Any], category: AttractionCategory) -> float:
+    """Heuristic 0..~12 score from OSM tags; notable, well-documented POIs rank higher."""
+    score = _CATEGORY_BASE_SCORE.get(category, 1.0)
+    if tags.get("wikidata"):
+        score += 3.0
+    if tags.get("wikipedia"):
+        score += 2.0
+    if str(tags.get("tourism") or "").lower() == "attraction":
+        score += 2.0
+    if tags.get("heritage") or tags.get("heritage:operator"):
+        score += 1.5
+    if tags.get("wikimedia_commons"):
+        score += 1.0
+    if tags.get("website") or tags.get("contact:website"):
+        score += 0.5
+    return round(score, 3)
 
 
 def _determine_category(tags: dict[str, Any]) -> AttractionCategory:

@@ -121,4 +121,29 @@ export const ApiClient = {
       throw err;
     }
   },
+
+  async put(
+    endpoint: string,
+    body: Record<string, unknown>,
+    opts?: RequestOptions,
+  ): Promise<Record<string, unknown>> {
+    const url = ApiConfig.getUrl(endpoint);
+    Logger.debug(`PUT Request: ${url}`);
+    try {
+      const response = await withTimeout(
+        fetch(url, {
+          method: 'PUT',
+          headers: buildHeaders(opts),
+          body: JSON.stringify(body),
+          signal: opts?.signal,
+        }),
+        opts?.timeoutMs ?? TIMEOUT_MS,
+      );
+      const result = await handle(response);
+      return (result && typeof result === 'object' ? (result as Record<string, unknown>) : { result });
+    } catch (err) {
+      Logger.error(`PUT Request failed: ${endpoint}`, err);
+      throw err;
+    }
+  },
 };

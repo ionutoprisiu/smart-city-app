@@ -39,7 +39,7 @@ const resetStore = () => {
     errorMessage: null,
     verificationScore: null,
     verificationReason: null,
-    verificationOcrData: null,
+    verificationMetadata: null,
   });
 };
 
@@ -101,7 +101,7 @@ describe('authStore', () => {
       errorMessage: 'some old error',
       verificationReason: 'ok',
       verificationScore: 0.9,
-      verificationOcrData: { sample: true },
+      verificationMetadata: { sample: true },
     });
 
     await useAuthStore.getState().logout();

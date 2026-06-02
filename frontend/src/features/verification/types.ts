@@ -2,6 +2,7 @@ import {
   VerificationStatus,
   verificationStatusFromString,
 } from '@shared/types/verification';
+import { roleFromString } from '@shared/types/role';
 
 export type VerificationSubmitResponse = {
   userId: number;
@@ -13,9 +14,15 @@ export type VerificationSubmitResponse = {
 export type VerificationStatusResponse = {
   userId: number;
   status: VerificationStatus;
+  role: 'user' | 'organizer' | 'admin';
+  isVerified: boolean;
   score: number | null;
   reason: string | null;
-  ocrData: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  canSubmit: boolean;
+  submitBlockedReason: string | null;
+  canAccessOrganizerFlow: boolean;
+  organizerFlowBlockedReason: string | null;
 };
 
 export const verificationSubmitFromJson = (json: any): VerificationSubmitResponse => ({
@@ -30,10 +37,22 @@ export const verificationStatusResponseFromJson = (
 ): VerificationStatusResponse => ({
   userId: Number(json?.userId ?? 0),
   status: verificationStatusFromString(json?.status),
+  role: roleFromString(json?.role) ?? 'user',
+  isVerified: Boolean(json?.isVerified),
   score: typeof json?.score === 'number' ? json.score : null,
   reason: typeof json?.reason === 'string' ? json.reason : null,
-  ocrData:
-    json?.ocrData && typeof json.ocrData === 'object'
-      ? (json.ocrData as Record<string, unknown>)
+  metadata:
+    json?.metadata && typeof json.metadata === 'object'
+      ? (json.metadata as Record<string, unknown>)
+      : json?.ocrData && typeof json.ocrData === 'object'
+        ? (json.ocrData as Record<string, unknown>)
+        : null,
+  canSubmit: Boolean(json?.canSubmit),
+  submitBlockedReason:
+    typeof json?.submitBlockedReason === 'string' ? json.submitBlockedReason : null,
+  canAccessOrganizerFlow: Boolean(json?.canAccessOrganizerFlow),
+  organizerFlowBlockedReason:
+    typeof json?.organizerFlowBlockedReason === 'string'
+      ? json.organizerFlowBlockedReason
       : null,
 });

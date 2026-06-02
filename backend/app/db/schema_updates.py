@@ -14,6 +14,11 @@ def apply_non_destructive_updates(engine: Engine) -> None:
             "ALTER TABLE users ADD CONSTRAINT users_role_check "
             "CHECK (role IN ('USER', 'ORGANIZER', 'ADMIN'))"
         ),
+        # Ranking signal for attractions (used to curate the default list).
+        (
+            "ALTER TABLE tourist_attractions "
+            "ADD COLUMN IF NOT EXISTS importance_score DOUBLE PRECISION DEFAULT 0 NOT NULL"
+        ),
     ]
     with engine.begin() as conn:
         for statement in statements:

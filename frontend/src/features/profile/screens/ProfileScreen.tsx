@@ -1,6 +1,6 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -42,10 +42,38 @@ const verificationTone = (
 export const ProfileScreen: React.FC = () => {
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
-  const { currentUser, logout } = useAuthStore();
+  const {
+    currentUser,
+    logout,
+    verificationReason,
+    canAccessOrganizerFlow,
+    organizerFlowBlockedReason,
+    refreshVerificationStatus,
+  } = useAuthStore();
   const setAuthState = useAuthStore.setState;
 
+  useFocusEffect(
+    useCallback(() => {
+      refreshVerificationStatus().catch(() => {});
+    }, [refreshVerificationStatus]),
+  );
+
   if (!currentUser) return null;
+
+  const isOrganizer = currentUser.role === 'organizer' || currentUser.role === 'admin';
+  const verificationStatus = currentUser.verificationStatus ?? 'notSubmitted';
+  const organizerLocked = !canAccessOrganizerFlow;
+  const organizerSubtitle = (() => {
+    if (organizerFlowBlockedReason) return organizerFlowBlockedReason;
+    if (isOrganizer) return 'You are already an organizer.';
+    if (verificationStatus === 'approved' && currentUser.isVerified) {
+      return 'Identity verified. Enable organizer access from Community.';
+    }
+    if (verificationStatus === 'notSubmitted') {
+      return verificationReason ?? 'Upload your ID and a selfie to apply.';
+    }
+    return verificationStatusLabel(verificationStatus);
+  })();
 
   const initials =
     `${currentUser.firstName[0] ?? ''}${currentUser.lastName[0] ?? ''}`.toUpperCase();
@@ -78,6 +106,10 @@ export const ProfileScreen: React.FC = () => {
     const res = await launchImageLibrary({
       mediaType: 'photo',
       selectionLimit: 1,
+      quality: 0.7 as const,
+      maxWidth: 1280,
+      maxHeight: 1280,
+      includeBase64: false,
     });
     await handlePickerResponse(res);
   };
@@ -87,6 +119,10 @@ export const ProfileScreen: React.FC = () => {
       mediaType: 'photo',
       cameraType: 'front',
       saveToPhotos: false,
+      quality: 0.7 as const,
+      maxWidth: 1280,
+      maxHeight: 1280,
+      includeBase64: false,
     });
     await handlePickerResponse(res);
   };
@@ -226,11 +262,18 @@ export const ProfileScreen: React.FC = () => {
           onPress={openPhotoActions}
         />
         <ProfileTile
+          icon="interests"
+          title="Travel preferences"
+          subtitle="Tune which attractions we show you"
+          onPress={() => navigation.navigate('EditPreferences')}
+        />
+        <ProfileTile
           icon="verified-user"
           title="Become an organizer"
-          subtitle={verificationStatusLabel(currentUser.verificationStatus)}
-          rightIcon={vTone.icon}
-          rightColor={vTone.color}
+          subtitle={organizerSubtitle}
+          rightIcon={organizerLocked ? vTone.icon : 'chevron-right'}
+          rightColor={organizerLocked ? theme.colors.outline : vTone.color}
+          disabled={organizerLocked}
           onPress={() => navigation.navigate('BecomeOrganizer')}
         />
       </Section>
@@ -312,6 +355,7 @@ type TileProps = {
   subtitle: string;
   rightIcon?: string;
   rightColor?: string;
+  disabled?: boolean;
   onPress: () => void;
 };
 
@@ -321,19 +365,25 @@ const ProfileTile: React.FC<TileProps> = ({
   subtitle,
   rightIcon,
   rightColor,
+  disabled = false,
   onPress,
 }) => {
   const theme = useTheme();
+  const muted = disabled ? 0.45 : 1;
   return (
     <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.tile, { opacity: pressed ? 0.85 : 1 }]}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.tile,
+        { opacity: disabled ? muted : pressed ? 0.85 : 1 },
+      ]}
     >
       <View style={[styles.tileIcon, { backgroundColor: theme.colors.primaryContainer + '73' }]}>
-        <Icon name={icon} size={22} color={theme.colors.primary} />
+        <Icon name={icon} size={22} color={disabled ? theme.colors.outline : theme.colors.primary} />
       </View>
       <View style={styles.tileContent}>
-        <Text style={[theme.typography.titleSmall, { color: theme.colors.onSurface }]}>
+        <Text style={[theme.typography.titleSmall, { color: disabled ? theme.colors.outline : theme.colors.onSurface }]}>
           {title}
         </Text>
         <Text

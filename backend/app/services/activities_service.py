@@ -24,7 +24,7 @@ def become_organizer(db: Session, user_id: int) -> User:
     user = _get_user_by_id(db, user_id)
     if user is None:
         raise ValueError("User not found")
-    if user.verification_status != VerificationStatus.APPROVED.value and not user.is_verified:
+    if user.verification_status != VerificationStatus.APPROVED.value or not user.is_verified:
         raise ValueError("Verification required to become organizer")
     if user.role != Role.ADMIN.value:
         user.role = Role.ORGANIZER.value

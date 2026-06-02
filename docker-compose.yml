@@ -1,10 +1,10 @@
 services:
   postgres:
     image: postgres:16
-    container_name: licenta-postgres
+    container_name: smart-city-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-licenta_db}
+      POSTGRES_DB: ${POSTGRES_DB:-smart_city_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
@@ -21,7 +21,7 @@ services:
   osrm-prepare-foot:
     image: osrm/osrm-backend:latest
     platform: linux/amd64
-    container_name: licenta-osrm-prepare-foot
+    container_name: smart-city-osrm-prepare-foot
     profiles: ["osrm-prepare"]
     entrypoint: /bin/sh
     command:
@@ -40,7 +40,7 @@ services:
   osrm-prepare-driving:
     image: osrm/osrm-backend:latest
     platform: linux/amd64
-    container_name: licenta-osrm-prepare-driving
+    container_name: smart-city-osrm-prepare-driving
     profiles: ["osrm-prepare"]
     entrypoint: /bin/sh
     command:
@@ -59,7 +59,7 @@ services:
   osrm-foot:
     image: osrm/osrm-backend:latest
     platform: linux/amd64
-    container_name: licenta-osrm-foot
+    container_name: smart-city-osrm-foot
     restart: unless-stopped
     command: osrm-routed --algorithm mld --port 5000 "/data/foot/${OSM_DATASET:-romania-260322}.osrm"
     healthcheck:
@@ -74,7 +74,7 @@ services:
   osrm-driving:
     image: osrm/osrm-backend:latest
     platform: linux/amd64
-    container_name: licenta-osrm-driving
+    container_name: smart-city-osrm-driving
     restart: unless-stopped
     command: osrm-routed --algorithm mld --port 5001 "/data/driving/${OSM_DATASET:-romania-260322}.osrm"
     healthcheck:
@@ -89,7 +89,7 @@ services:
   aco-service:
     build:
       context: ./aco-service
-    container_name: licenta-aco
+    container_name: smart-city-aco
     restart: unless-stopped
     environment:
       OSRM_FOOT_BASE_URL: http://osrm-foot:5000
@@ -112,10 +112,10 @@ services:
   chat-service:
     build:
       context: ./chat-service
-    container_name: licenta-chat
+    container_name: smart-city-chat
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-licenta_db}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-smart_city_db}}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me-use-openssl-rand-hex-32}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       CORS_ORIGINS_RAW: ${CORS_ORIGINS_RAW:-*}
@@ -138,11 +138,10 @@ services:
   verification-service:
     build:
       context: ./verification-service
-    container_name: licenta-verification
+    container_name: smart-city-verification
     restart: unless-stopped
     environment:
-      VERIFICATION_APPROVE_THRESHOLD: ${VERIFICATION_APPROVE_THRESHOLD:-0.62}
-      VERIFICATION_MANUAL_THRESHOLD: ${VERIFICATION_MANUAL_THRESHOLD:-0.50}
+      VERIFICATION_APPROVE_THRESHOLD: ${VERIFICATION_APPROVE_THRESHOLD:-0.55}
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8090/health\")'"]
       interval: 10s
@@ -155,16 +154,17 @@ services:
   backend:
     build:
       context: ./backend
-    container_name: licenta-backend
+    container_name: smart-city-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-licenta_db}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-smart_city_db}}
       ACO_SERVICE_URL: http://aco-service:8000
       VERIFICATION_SERVICE_URL: http://verification-service:8090
       CORS_ORIGINS_RAW: ${CORS_ORIGINS_RAW:-*}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me-use-openssl-rand-hex-32}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      SYNC_ATTRACTIONS_ON_STARTUP: ${SYNC_ATTRACTIONS_ON_STARTUP:-true}
       SEED_ADMIN_USER: ${SEED_ADMIN_USER:-true}
       ADMIN_USER_EMAIL: ${ADMIN_USER_EMAIL:-admin@admin.com}
       ADMIN_USER_PASSWORD: ${ADMIN_USER_PASSWORD:-admin}
@@ -175,6 +175,9 @@ services:
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-demo1234}
       DEMO_USER_FIRST_NAME: ${DEMO_USER_FIRST_NAME:-Demo}
       DEMO_USER_LAST_NAME: ${DEMO_USER_LAST_NAME:-User}
+      VERIFICATION_UPLOAD_DIR: /app/uploads/verification
+    volumes:
+      - verification_uploads:/app/uploads/verification
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8080/health\")'"]
       interval: 10s
@@ -194,5 +197,17 @@ services:
       chat-service:
         condition: service_healthy
 
+  admin-web:
+    build:
+      context: ./admin-web
+    container_name: smart-city-admin-web
+    restart: unless-stopped
+    ports:
+      - "8095:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  verification_uploads:

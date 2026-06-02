@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user_id, get_db, get_optional_current_user_id
+from app.schemas.preferences import PreferencesResponse, PreferencesUpdate
 from app.schemas.visit_city import OptimizeRouteBody
-from app.services import visit_city_service
+from app.services import preferences_service, visit_city_service
 
 router = APIRouter(prefix="/visit-city", tags=["visit-city"])
 
@@ -20,9 +21,29 @@ def get_attractions(
     category: str | None = None,
     q: str | None = None,
     db: Session = Depends(get_db),
+    user_id: int | None = Depends(get_optional_current_user_id),
 ) -> dict:
-    data = visit_city_service.get_attractions(db, category, q)
+    data = visit_city_service.get_attractions(db, category, q, user_id=user_id)
     return {"data": data}
+
+
+@router.get("/preferences", response_model=PreferencesResponse)
+def get_preferences(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> PreferencesResponse:
+    data = preferences_service.get_preferences(db, user_id)
+    return PreferencesResponse(**data)
+
+
+@router.put("/preferences", response_model=PreferencesResponse)
+def update_preferences(
+    body: PreferencesUpdate,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> PreferencesResponse:
+    data = preferences_service.save_preferences(db, user_id, body.categories)
+    return PreferencesResponse(**data)
 
 
 @router.get("/attractions/live")

@@ -1,4 +1,3 @@
-from .verification import VerificationResponse
+from .verification import VerificationMetadataResponse, VerificationResponse
 
-__all__ = ["VerificationResponse"]
-
+__all__ = ["VerificationMetadataResponse", "VerificationResponse"]

@@ -19,8 +19,10 @@ export type MainTabsParamList = {
 
 export type AppRootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
+  Onboarding: undefined;
   Main: NavigatorScreenParams<MainTabsParamList>;
   BecomeOrganizer: undefined;
+  EditPreferences: undefined;
 };
 
 declare global {

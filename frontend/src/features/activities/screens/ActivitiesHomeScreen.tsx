@@ -1,6 +1,6 @@
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -38,20 +38,30 @@ export const ActivitiesHomeScreen: React.FC = () => {
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
   const currentUser = useAuthStore((s) => s.currentUser);
+  const currentUserId = currentUser?.id;
+  const refreshVerificationStatus = useAuthStore((s) => s.refreshVerificationStatus);
   const setCurrentUser = useAuthStore.setState;
   const [filter, setFilter] = useState<ActivityListFilter>('all');
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadedScope, setLoadedScope] = useState<'mine' | 'public' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isFocused = useIsFocused();
+
+  const fetchScope: 'mine' | 'public' =
+    filter === 'mine' && currentUserId != null ? 'mine' : 'public';
 
   const isOrganizer = currentUser?.role === 'organizer' || currentUser?.role === 'admin';
   const canBecomeOrganizer = !isOrganizer && currentUser?.isVerified === true;
 
   const listings = useMemo(
-    () => filterActivityListings(buildActivityListings(events, clubs), filter, currentUser?.id),
-    [events, clubs, filter, currentUser?.id],
+    () => filterActivityListings(buildActivityListings(events, clubs), filter, currentUserId),
+    [events, clubs, filter, currentUserId],
   );
+
+  const showListLoader = isLoading && loadedScope !== fetchScope;
+  const showEmptyState = loadedScope === fetchScope && listings.length === 0;
 
   const setActionError = useCallback((error: unknown, fallback: string) => {
     const message = extractErrorMessage(error);
@@ -105,30 +115,46 @@ export const ActivitiesHomeScreen: React.FC = () => {
     };
   }, [themedStyles]);
 
-  const refresh = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const useMine = filter === 'mine' && currentUser != null;
-      const [nextEvents, nextClubs] = await Promise.all(
-        useMine
-          ? [ActivitiesApi.listMyEvents(), ActivitiesApi.listMyClubs()]
-          : [ActivitiesApi.listEvents(), ActivitiesApi.listClubs()],
-      );
-      setEvents(nextEvents);
-      setClubs(nextClubs);
-    } catch (e: unknown) {
-      setActionError(e, 'Failed to load community activities');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUser, filter, setActionError]);
-
-  useFocusEffect(
-    useCallback(() => {
-      refresh().catch(() => {});
-    }, [refresh]),
+  const loadActivities = useCallback(
+    async (scope: 'mine' | 'public', cancelled?: () => boolean) => {
+      setIsLoading(true);
+      setErrorMessage(null);
+      try {
+        const useMine = scope === 'mine';
+        const [nextEvents, nextClubs] = await Promise.all(
+          useMine
+            ? [ActivitiesApi.listMyEvents(), ActivitiesApi.listMyClubs()]
+            : [ActivitiesApi.listEvents(), ActivitiesApi.listClubs()],
+        );
+        if (cancelled?.()) return;
+        setEvents(nextEvents);
+        setClubs(nextClubs);
+        setLoadedScope(scope);
+      } catch (e: unknown) {
+        if (cancelled?.()) return;
+        setActionError(e, 'Failed to load community activities');
+      } finally {
+        if (!cancelled?.()) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [setActionError],
   );
+
+  useEffect(() => {
+    if (!isFocused) return;
+    refreshVerificationStatus().catch(() => {});
+  }, [isFocused, refreshVerificationStatus]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    let cancelled = false;
+    loadActivities(fetchScope, () => cancelled).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isFocused, fetchScope, currentUserId, loadActivities]);
 
   const onBecomeOrganizer = async () => {
     if (!currentUser) return;
@@ -297,9 +323,9 @@ export const ActivitiesHomeScreen: React.FC = () => {
           })}
         </ScrollView>
 
-        {isLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
+        {showListLoader ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
 
-        {!isLoading && listings.length === 0 ? (
+        {showEmptyState ? (
           <Text style={[theme.typography.bodyMedium, themedStyles.cardSub, styles.empty]}>
             {filter === 'mine'
               ? 'You have no events or groups here yet.'

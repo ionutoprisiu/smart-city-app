@@ -138,7 +138,7 @@ async function doNominatimFetch(latitude: number, longitude: number): Promise<an
     const response = await fetch(url, {
       headers: {
         'Accept-Language': 'ro,en;q=0.9',
-        'User-Agent': 'LicentaVisitCity/1.0 (iOS; contact: student-project)',
+        'User-Agent': 'SmartCityVisitCity/1.0 (iOS; contact: student-project)',
       },
     });
 

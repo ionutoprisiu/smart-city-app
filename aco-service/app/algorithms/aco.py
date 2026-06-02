@@ -27,7 +27,7 @@ EARLY_STOPPING_THRESHOLD = 50
 class ACOOptimizer:
     """Ant System–style ACO: stochastic construction + pheromone deposit/evaporation on a cost matrix."""
 
-    def __init__(self, cost_matrix: list[list[float]]):
+    def __init__(self, cost_matrix: list[list[float]], seed: int | None = None):
         if not cost_matrix:
             raise ValueError("Cost matrix cannot be empty")
         if len(cost_matrix) < 2:
@@ -41,15 +41,24 @@ class ACOOptimizer:
         ]
         self.best_route: list[int] = []
         self.best_cost = float("inf")
+        # Best cost known at the end of each iteration; lets benchmarks plot
+        # convergence without changing the public return contract.
+        self.cost_history: list[float] = []
+        # Dedicated RNG so runs are reproducible when a seed is given (used by
+        # experiments/benchmarks); falls back to non-deterministic when None.
+        self._rng = random.Random(seed)
 
         log.info("ACO initialized: %d points", self.num_points)
 
     def optimize(self) -> tuple[list[int], float]:
-        no_improvement_count = 0
+        # Count whole iterations (not individual ants) without a new best, so
+        # early stopping triggers after EARLY_STOPPING_THRESHOLD stagnant rounds.
+        no_improvement_iterations = 0
 
         for iteration in range(MAX_ITERATIONS):
             routes: list[list[int]] = []
             costs: list[float] = []
+            improved = False
 
             for _ in range(NUM_ANTS):
                 route = self._construct_route()
@@ -60,13 +69,13 @@ class ACOOptimizer:
                 if cost < self.best_cost:
                     self.best_cost = cost
                     self.best_route = route.copy()
-                    no_improvement_count = 0
-                else:
-                    no_improvement_count += 1
+                    improved = True
 
             self._update_pheromones(routes, costs)
+            self.cost_history.append(self.best_cost)
 
-            if no_improvement_count > EARLY_STOPPING_THRESHOLD:
+            no_improvement_iterations = 0 if improved else no_improvement_iterations + 1
+            if no_improvement_iterations >= EARLY_STOPPING_THRESHOLD:
                 log.info("Early stopping at iteration %d", iteration + 1)
                 break
 
@@ -96,7 +105,7 @@ class ACOOptimizer:
         while unvisited:
             current = route[-1]
             probabilities = self._probabilities(current, unvisited)
-            nxt = random.choices(unvisited, weights=probabilities)[0]
+            nxt = self._rng.choices(unvisited, weights=probabilities)[0]
             route.append(nxt)
             unvisited.remove(nxt)
         return route

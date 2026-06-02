@@ -167,15 +167,6 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => {
     } finally {
       set({ isLoading: false });
     }
-
-    if (get().selectedCategory == null && get().searchQuery.length === 0) {
-      // Background refresh with live attractions; ignore failures.
-      VisitCityApi.getLiveAttractions({ limit: 1200 })
-        .then((live) => {
-          if (live.length > 0) set({ attractions: live });
-        })
-        .catch((e) => Logger.warning(`Live attractions refresh skipped: ${e}`));
-    }
   },
 
   optimizeRoute: async () => {

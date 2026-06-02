@@ -21,7 +21,13 @@ class TouristAttraction(Base):
     estimated_visit_time: Mapped[int] = mapped_column(
         "estimated_visit_time", Integer, default=30, nullable=False
     )
+    importance_score: Mapped[float] = mapped_column(
+        "importance_score", Float, default=0.0, nullable=False
+    )
     is_active: Mapped[bool] = mapped_column("is_active", Boolean, default=True, nullable=False)
+    importance_score: Mapped[float] = mapped_column(
+        "importance_score", Float, default=0.0, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         "created_at", DateTime, default=utc_now, nullable=False
     )

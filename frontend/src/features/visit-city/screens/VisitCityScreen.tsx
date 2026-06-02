@@ -21,6 +21,7 @@ import { RouteStartBar } from '../components/RouteStartBar';
 import { SelectionDock } from '../components/SelectionDock';
 import { useVisitCityStore } from '../store/visitCityStore';
 import {
+  ATTRACTION_CATEGORIES,
   Attraction,
   AttractionCategory,
   categoryIcon,
@@ -30,16 +31,11 @@ import { MapScreen } from './MapScreen';
 
 type QuickFilter = 'all' | 'selected' | 'culture' | 'foodAndDrink';
 
-const PAGE_SIZE = 30;
+const LIST_BATCH = 24;
 
-const CATEGORY_CHIPS: AttractionCategory[] = [
-  'museum',
-  'church',
-  'park',
-  'monument',
-  'restaurant',
-  'theater',
-];
+const CATEGORY_CHIPS: AttractionCategory[] = ATTRACTION_CATEGORIES.filter(
+  (c) => c !== 'other' && c !== 'hotel',
+);
 
 const listSeparator10 = () => <View style={styles.separator10} />;
 const listSeparator8 = () => <View style={styles.separator8} />;
@@ -99,7 +95,7 @@ export const VisitCityScreen: React.FC = () => {
   const [showMap, setShowMap] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [listBatch, setListBatch] = useState(LIST_BATCH);
   const [details, setDetails] = useState<Attraction | null>(null);
   const themedStyles = {
     headerWrap: { paddingHorizontal: theme.spacing.screen },
@@ -116,9 +112,7 @@ export const VisitCityScreen: React.FC = () => {
     searchInput: { flex: 1, color: theme.colors.onSurface, paddingVertical: 12 },
     searchClear: { padding: 8 },
     chipText: { color: theme.colors.onSurface },
-    itemWrap: { marginBottom: 10, paddingHorizontal: theme.spacing.screen },
-    footerWrap: { paddingHorizontal: theme.spacing.screen, paddingVertical: theme.spacing.large },
-    showMoreText: { color: theme.colors.primary, marginLeft: 8 },
+    itemWrap: { paddingHorizontal: theme.spacing.screen },
     appBarTitle: { color: theme.colors.onSurface },
     appBarLeftSpacer: { width: 48 },
     listContent: { paddingBottom: 220 },
@@ -147,25 +141,34 @@ export const VisitCityScreen: React.FC = () => {
       const aSel = selectedIds.includes(a.id);
       const bSel = selectedIds.includes(b.id);
       if (aSel !== bSel) return aSel ? -1 : 1;
+      if (b.importanceScore !== a.importanceScore) {
+        return b.importanceScore - a.importanceScore;
+      }
       return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     });
   }, [attractions, quickFilter, selectedIds]);
 
-  const visibleAttractions = filteredAttractions.slice(0, visibleCount);
+  const visibleAttractions = filteredAttractions.slice(0, listBatch);
+  const hasMore = listBatch < filteredAttractions.length;
+
+  const loadMore = () => {
+    if (!hasMore) return;
+    setListBatch((c) => Math.min(c + LIST_BATCH, filteredAttractions.length));
+  };
 
   const onSearchChange = (value: string) => {
     setSearchInput(value);
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
       search(value.trim());
-      setVisibleCount(PAGE_SIZE);
+      setListBatch(LIST_BATCH);
     }, 350);
   };
 
   const onSearchSubmit = () => {
     if (debounce.current) clearTimeout(debounce.current);
     search(searchInput.trim());
-    setVisibleCount(PAGE_SIZE);
+    setListBatch(LIST_BATCH);
   };
 
   const onSearchClear = () => {
@@ -173,7 +176,7 @@ export const VisitCityScreen: React.FC = () => {
     if (debounce.current) clearTimeout(debounce.current);
     clearFilters();
     setQuickFilter('all');
-    setVisibleCount(PAGE_SIZE);
+    setListBatch(LIST_BATCH);
   };
 
   const onOptimizeFromList = async () => {
@@ -195,10 +198,10 @@ export const VisitCityScreen: React.FC = () => {
             themedStyles.headerSubtitle,
           ]}
         >
-          {filteredAttractions.length} places to discover
-          {filteredAttractions.length !== attractions.length
-            ? ` • filtered from ${attractions.length}`
-            : ''}
+          {filteredAttractions.length} places
+          {attractions.length > 0 && filteredAttractions.length !== attractions.length
+            ? ` • of ${attractions.length} in Cluj`
+            : ' in Cluj-Napoca'}
         </Text>
       </View>
 
@@ -249,7 +252,7 @@ export const VisitCityScreen: React.FC = () => {
             <Pressable
               onPress={() => {
                 filterByCategory(active ? null : item);
-                setVisibleCount(PAGE_SIZE);
+                setListBatch(LIST_BATCH);
               }}
               style={({ pressed }) => [
                 styles.chip,
@@ -290,7 +293,7 @@ export const VisitCityScreen: React.FC = () => {
             <Pressable
               onPress={() => {
                 setQuickFilter(item.id);
-                setVisibleCount(PAGE_SIZE);
+                setListBatch(LIST_BATCH);
               }}
               style={({ pressed }) => [
                 styles.chipSmall,
@@ -325,35 +328,6 @@ export const VisitCityScreen: React.FC = () => {
       />
     </View>
   );
-
-  const renderFooter = () => {
-    if (filteredAttractions.length <= visibleCount) return null;
-    return (
-      <View style={themedStyles.footerWrap}>
-        <Pressable
-          onPress={() => setVisibleCount((c) => c + PAGE_SIZE)}
-          style={({ pressed }) => [
-            styles.showMore,
-            {
-              borderColor: theme.colors.outlineVariant,
-              borderRadius: theme.radius.large,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <Icon name="expand-more" size={20} color={theme.colors.primary} />
-          <Text
-            style={[
-              theme.typography.labelLarge,
-              themedStyles.showMoreText,
-            ]}
-          >
-            Show more ({filteredAttractions.length - visibleCount} left)
-          </Text>
-        </Pressable>
-      </View>
-    );
-  };
 
   const renderEmptyOrLoading = () => {
     if (isLoading) {
@@ -421,10 +395,15 @@ export const VisitCityScreen: React.FC = () => {
             keyExtractor={(item) => String(item.id)}
             renderItem={renderItem}
             ListHeaderComponent={renderHeader}
-            ListFooterComponent={renderFooter}
             ListEmptyComponent={renderEmptyOrLoading}
             contentContainerStyle={themedStyles.listContent}
             keyboardShouldPersistTaps="handled"
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={7}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.35}
+            ItemSeparatorComponent={listSeparator8}
           />
 
           <View pointerEvents="box-none" style={themedStyles.routeDock}>
@@ -505,13 +484,6 @@ const styles = StyleSheet.create({
   },
   separator8: {
     width: 8,
-  },
-  showMore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderWidth: 1,
   },
   centeredFill: {
     flex: 1,
