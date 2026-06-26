@@ -16,3 +16,7 @@ def room_for_kind(kind: str, resource_id: int) -> str:
     if normalized == "club":
         return room_for_club(resource_id)
     raise ValueError("kind must be 'event' or 'club'")
+
+
+def room_for_thread(kind: str, resource_id: int, thread_user_id: int) -> str:
+    return f"{room_for_kind(kind, resource_id)}:user:{thread_user_id}"

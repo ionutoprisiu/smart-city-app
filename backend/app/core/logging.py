@@ -1,5 +1,3 @@
-"""Process-wide logging configuration (called once at startup)."""
-
 from __future__ import annotations
 
 import logging

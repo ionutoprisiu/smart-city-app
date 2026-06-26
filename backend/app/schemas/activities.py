@@ -29,6 +29,9 @@ class EventResponse(BaseModel):
     status: str
     createdBy: int
     createdAt: datetime
+    participantsCount: int = 0
+    participating: bool = False
+    isEventOrganizer: bool = False
 
 
 class ClubCreateRequest(BaseModel):

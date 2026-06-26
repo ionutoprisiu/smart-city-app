@@ -1,10 +1,3 @@
-"""Ant Colony Optimization for the open-tour TSP.
-
-Pure algorithm: takes a cost matrix, returns the best route (always anchored
-at index 0) and its accumulated cost. No HTTP, no logging configuration —
-caller decides what cost matrix to feed in (haversine, OSRM duration, etc.).
-"""
-
 from __future__ import annotations
 
 import logging
@@ -25,9 +18,19 @@ EARLY_STOPPING_THRESHOLD = 50
 
 
 class ACOOptimizer:
-    """Ant System–style ACO: stochastic construction + pheromone deposit/evaporation on a cost matrix."""
-
-    def __init__(self, cost_matrix: list[list[float]], seed: int | None = None):
+    def __init__(
+        self,
+        cost_matrix: list[list[float]],
+        seed: int | None = None,
+        *,
+        num_ants: int = NUM_ANTS,
+        max_iterations: int = MAX_ITERATIONS,
+        alpha: float = ALPHA,
+        beta: float = BETA,
+        rho: float = RHO,
+        q: float = Q,
+        early_stopping_threshold: int = EARLY_STOPPING_THRESHOLD,
+    ):
         if not cost_matrix:
             raise ValueError("Cost matrix cannot be empty")
         if len(cost_matrix) < 2:
@@ -35,32 +38,33 @@ class ACOOptimizer:
 
         self.cost_matrix = cost_matrix
         self.num_points = len(cost_matrix)
+        self.num_ants = max(1, int(num_ants))
+        self.max_iterations = max(1, int(max_iterations))
+        self.alpha = float(alpha)
+        self.beta = float(beta)
+        self.rho = min(max(float(rho), 0.0), 1.0)
+        self.q = float(q)
+        self.early_stopping_threshold = max(1, int(early_stopping_threshold))
         self.pheromones = [
             [INITIAL_PHEROMONE for _ in range(self.num_points)]
             for _ in range(self.num_points)
         ]
         self.best_route: list[int] = []
         self.best_cost = float("inf")
-        # Best cost known at the end of each iteration; lets benchmarks plot
-        # convergence without changing the public return contract.
         self.cost_history: list[float] = []
-        # Dedicated RNG so runs are reproducible when a seed is given (used by
-        # experiments/benchmarks); falls back to non-deterministic when None.
         self._rng = random.Random(seed)
 
         log.info("ACO initialized: %d points", self.num_points)
 
     def optimize(self) -> tuple[list[int], float]:
-        # Count whole iterations (not individual ants) without a new best, so
-        # early stopping triggers after EARLY_STOPPING_THRESHOLD stagnant rounds.
-        no_improvement_iterations = 0
+        stagnant_iterations = 0
 
-        for iteration in range(MAX_ITERATIONS):
+        for iteration in range(self.max_iterations):
             routes: list[list[int]] = []
             costs: list[float] = []
             improved = False
 
-            for _ in range(NUM_ANTS):
+            for _ in range(self.num_ants):
                 route = self._construct_route()
                 cost = calculate_route_cost(route, self.cost_matrix)
                 routes.append(route)
@@ -74,8 +78,8 @@ class ACOOptimizer:
             self._update_pheromones(routes, costs)
             self.cost_history.append(self.best_cost)
 
-            no_improvement_iterations = 0 if improved else no_improvement_iterations + 1
-            if no_improvement_iterations >= EARLY_STOPPING_THRESHOLD:
+            stagnant_iterations = 0 if improved else stagnant_iterations + 1
+            if stagnant_iterations >= self.early_stopping_threshold:
                 log.info("Early stopping at iteration %d", iteration + 1)
                 break
 
@@ -90,7 +94,7 @@ class ACOOptimizer:
             return []
 
         numerators = [
-            (self.pheromones[current][nxt] ** ALPHA) * (self._visibility(current, nxt) ** BETA)
+            (self.pheromones[current][nxt] ** self.alpha) * (self._visibility(current, nxt) ** self.beta)
             for nxt in unvisited
         ]
         total = sum(numerators)
@@ -99,7 +103,6 @@ class ACOOptimizer:
         return [1.0 / len(unvisited)] * len(unvisited)
 
     def _construct_route(self) -> list[int]:
-        """Build one tour anchored at index 0."""
         route = [0]
         unvisited = list(range(1, self.num_points))
         while unvisited:
@@ -113,11 +116,11 @@ class ACOOptimizer:
     def _update_pheromones(self, routes: list[list[int]], costs: list[float]) -> None:
         for i in range(self.num_points):
             for j in range(self.num_points):
-                self.pheromones[i][j] *= 1 - RHO
+                self.pheromones[i][j] *= 1 - self.rho
 
         for route, cost in zip(routes, costs):
             if cost <= 0:
                 continue
-            deposit = Q / cost
+            deposit = self.q / cost
             for i in range(len(route) - 1):
                 self.pheromones[route[i]][route[i + 1]] += deposit

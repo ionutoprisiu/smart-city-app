@@ -1,5 +1,3 @@
-"""Admin user role management."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -183,3 +181,46 @@ def test_admin_resets_user_verification(client: TestClient) -> None:
 
     promote = client.post(f"/api/admin/users/{user_id}/promote-organizer", headers=headers)
     assert promote.status_code == 400
+
+
+def test_admin_updates_user(client: TestClient) -> None:
+    admin_id = client.ids["admin_id"]  # type: ignore[attr-defined]
+    user_id = client.ids["verified_user_id"]  # type: ignore[attr-defined]
+    headers = _auth_header(admin_id)
+
+    response = client.patch(
+        f"/api/admin/users/{user_id}",
+        headers=headers,
+        json={
+            "firstName": "Updated",
+            "lastName": "Person",
+            "email": "updated@test.com",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["firstName"] == "Updated"
+    assert body["lastName"] == "Person"
+    assert body["email"] == "updated@test.com"
+
+
+def test_admin_deletes_user(client: TestClient) -> None:
+    admin_id = client.ids["admin_id"]  # type: ignore[attr-defined]
+    user_id = client.ids["verified_user_id"]  # type: ignore[attr-defined]
+    headers = _auth_header(admin_id)
+
+    response = client.delete(f"/api/admin/users/{user_id}", headers=headers)
+    assert response.status_code == 204
+
+    listing = client.get("/api/admin/users", headers=headers)
+    assert listing.status_code == 200
+    ids = [item["userId"] for item in listing.json()["items"]]
+    assert user_id not in ids
+
+
+def test_cannot_delete_admin_user(client: TestClient) -> None:
+    admin_id = client.ids["admin_id"]  # type: ignore[attr-defined]
+    headers = _auth_header(admin_id)
+
+    response = client.delete(f"/api/admin/users/{admin_id}", headers=headers)
+    assert response.status_code == 400

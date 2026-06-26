@@ -1,5 +1,3 @@
-"""HTTP client for the identity verification microservice."""
-
 from __future__ import annotations
 
 import logging
@@ -15,7 +13,7 @@ HTTP_TIMEOUT_SECONDS = 60.0
 
 
 class VerificationServiceError(RuntimeError):
-    """Raised when the verification service is unavailable or rejects the request."""
+    pass
 
 
 async def submit(

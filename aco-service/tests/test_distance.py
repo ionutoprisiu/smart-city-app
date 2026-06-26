@@ -1,5 +1,3 @@
-"""Pure-math distance helpers: ensure haversine + matrix builders are sane."""
-
 from __future__ import annotations
 
 from app.common.distance import (

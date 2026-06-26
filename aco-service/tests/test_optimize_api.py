@@ -1,5 +1,3 @@
-"""HTTP tests for ``POST /optimize`` with OSRM integration mocked."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -20,8 +18,6 @@ def _body_start_and_one_attraction() -> dict[str, Any]:
 
 @pytest.fixture
 def mock_osrm_single_leg(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Deterministic matrices + segment for start + one attraction (no ACO randomness)."""
-
     async def fetch_matrices(
         points: list[dict], profile: str
     ) -> tuple[list[list[float]] | None, list[list[float]] | None]:
@@ -89,7 +85,7 @@ def test_optimize_invalid_body_too_few_points(client: TestClient) -> None:
     r = client.post(
         "/optimize",
         json={
-            "attractions": [{"id": 1, "latitude": 46.77, "longitude": 23.59}],
+            "attractions": [],
             "useOsrm": False,
         },
     )
@@ -183,10 +179,8 @@ def test_optimize_single_attraction_foot_profile_with_osrm_mock(
 def test_optimize_three_points_stub_aco_order_and_osrm_segments(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ACO is stubbed so visit order is deterministic; OSRM matrices + segments are mocked."""
-
     class StubACO:
-        def __init__(self, _cost_matrix: list[list[float]]) -> None:
+        def __init__(self, _cost_matrix: list[list[float]], **_kwargs) -> None:
             pass
 
         def optimize(self) -> tuple[list[int], float]:

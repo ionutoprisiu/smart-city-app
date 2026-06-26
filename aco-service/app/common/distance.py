@@ -1,22 +1,13 @@
-"""Pure-math distance helpers.
-
-No I/O — only haversine math and matrix builders. Network-aware
-distance/duration matrices live in `app.integrations.osrm_client`.
-"""
-
 from __future__ import annotations
 
 import math
 
 EARTH_RADIUS_KM = 6371.0
-
-# Sentinel values used when OSRM returns a missing edge between two points.
 MISSING_EDGE_KM = 1e6
-MISSING_EDGE_SEC = 864_000.0  # 10 days
+MISSING_EDGE_SEC = 864_000.0
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance in kilometers between two coordinates."""
     lat1_r, lon1_r = math.radians(lat1), math.radians(lon1)
     lat2_r, lon2_r = math.radians(lat2), math.radians(lon2)
     dlat = lat2_r - lat1_r
@@ -26,7 +17,6 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 def calculate_distance_matrix(points: list[dict]) -> list[list[float]]:
-    """Symmetric haversine distance matrix (km)."""
     n = len(points)
     matrix = [[0.0] * n for _ in range(n)]
     for i in range(n):
@@ -43,14 +33,12 @@ def calculate_distance_matrix(points: list[dict]) -> list[list[float]]:
 
 
 def calculate_route_distance(route: list[int], distance_matrix: list[list[float]]) -> float:
-    """Sum of edge distances along an ordered route."""
     if len(route) < 2:
         return 0.0
     return sum(distance_matrix[route[i]][route[i + 1]] for i in range(len(route) - 1))
 
 
 def calculate_route_cost(route: list[int], cost_matrix: list[list[float]]) -> float:
-    """Sum of arbitrary edge costs (e.g. durations) along an ordered route."""
     if len(route) < 2:
         return 0.0
     return sum(cost_matrix[route[i]][route[i + 1]] for i in range(len(route) - 1))

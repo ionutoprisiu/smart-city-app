@@ -1,5 +1,3 @@
-"""Unit tests for the exact brute-force TSP reference."""
-
 from __future__ import annotations
 
 import pytest
@@ -20,8 +18,14 @@ def test_rejects_instances_above_limit() -> None:
         brute_force(matrix, max_points=3)
 
 
+def test_accepts_up_to_default_limit() -> None:
+    matrix = [[0.0 if i == j else 1.0 for j in range(12)] for i in range(12)]
+    route, cost = brute_force(matrix)
+    assert len(route) == 12
+    assert cost >= 0.0
+
+
 def test_finds_known_optimum() -> None:
-    # Optimal open tour from 0 is 0 -> 1 -> 3 -> 2 (cost 1 + 1 + 1 = 3).
     matrix = [
         [0.0, 1.0, 8.0, 8.0],
         [1.0, 0.0, 8.0, 1.0],

@@ -1,5 +1,3 @@
-"""Global FastAPI exception handlers (maps domain errors to JSON responses)."""
-
 from __future__ import annotations
 
 import logging
@@ -13,8 +11,6 @@ log = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Attach service-wide exception handlers to the given FastAPI app."""
-
     @app.exception_handler(ValidationAppError)
     async def handle_validation(_request: Request, exc: ValidationAppError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})

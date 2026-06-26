@@ -4,7 +4,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin_user_id
 from app.models.enums import VerificationStatus
-from app.schemas.admin import AdminRejectRequest, AdminUserListResponse, AdminVerificationListResponse
+from app.schemas.admin import (
+    AdminRejectRequest,
+    AdminUserItem,
+    AdminUserListResponse,
+    AdminUserUpdateRequest,
+    AdminVerificationListResponse,
+)
 from app.services import admin_service, verification_storage, visit_city_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -136,10 +142,34 @@ def reset_verification(
         raise _map_value_error(exc) from exc
 
 
+@router.patch("/users/{user_id}", response_model=AdminUserItem)
+def update_user(
+    user_id: int,
+    body: AdminUserUpdateRequest,
+    admin_id: int = Depends(require_admin_user_id),
+    db: Session = Depends(get_db),
+):
+    try:
+        return admin_service.update_user(db, user_id, body, admin_id)
+    except ValueError as exc:
+        raise _map_value_error(exc) from exc
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    admin_id: int = Depends(require_admin_user_id),
+    db: Session = Depends(get_db),
+):
+    try:
+        admin_service.delete_user(db, user_id, admin_id)
+    except ValueError as exc:
+        raise _map_value_error(exc) from exc
+
+
 @router.post("/attractions/sync")
 def sync_attractions(
     _admin_id: int = Depends(require_admin_user_id),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Refresh the attraction catalog from OpenStreetMap (Overpass). Admin only."""
     return {"data": visit_city_service.sync_attractions(db)}

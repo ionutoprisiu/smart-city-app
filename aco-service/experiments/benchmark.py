@@ -1,22 +1,3 @@
-"""Benchmark ACO against baselines on fixed Cluj-Napoca attraction sets.
-
-Generates the experimental evidence for the thesis "Testing and validation"
-chapter: for each attraction set it compares the initial (unoptimized) order,
-the nearest-neighbor greedy heuristic, ACO (averaged over several seeds) and,
-for small instances, the exact brute-force optimum. Distances use the
-Haversine metric so the script runs fully offline (no OSRM/Docker required).
-
-Usage (from the aco-service directory):
-
-    python -m experiments.benchmark
-    python -m experiments.benchmark --runs 20 --out-dir experiments/results
-
-Outputs (printed and written under ``--out-dir``):
-    - comparison.md   Markdown table for direct inclusion in LaTeX
-    - comparison.csv  same data, machine-readable
-    - convergence.csv ACO best-cost per iteration for the largest set
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -31,7 +12,7 @@ from app.algorithms.brute_force import DEFAULT_MAX_POINTS, brute_force
 from app.algorithms.nearest_neighbor import nearest_neighbor
 from app.common.distance import calculate_distance_matrix, calculate_route_cost
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "benchmark_sets.json"
+DATA_FILE = Path(__file__).resolve().parent.parent / "app" / "data" / "benchmark_sets.json"
 
 
 def load_dataset(path: Path = DATA_FILE) -> dict[str, Any]:
@@ -40,7 +21,6 @@ def load_dataset(path: Path = DATA_FILE) -> dict[str, Any]:
 
 
 def build_points(dataset: dict[str, Any], attraction_ids: list[int]) -> list[dict]:
-    """Start point at index 0, then the selected attractions in id order."""
     pool = {item["id"]: item for item in dataset["pool"]}
     start = dataset["start"]
     points = [{"latitude": start["latitude"], "longitude": start["longitude"]}]
@@ -57,7 +37,6 @@ def _timed(func) -> tuple[Any, float]:
 
 
 def run_aco(matrix: list[list[float]], runs: int) -> dict[str, float]:
-    """Run ACO ``runs`` times with distinct seeds; report cost stats + mean time."""
     costs: list[float] = []
     times_ms: list[float] = []
     best_cost = float("inf")

@@ -1,5 +1,3 @@
-"""SQLAlchemy engine and session factory (sync; one session per request via ``get_db``)."""
-
 from __future__ import annotations
 
 from sqlalchemy import create_engine

@@ -6,6 +6,8 @@ from app.models.enums import Role, VerificationStatus
 class VerificationSubmitResponse(BaseModel):
     userId: int
     status: VerificationStatus
+    role: Role
+    isVerified: bool
     score: float | None = None
     reason: str
 

@@ -1,10 +1,3 @@
-"""HTTP client for the OSRM routing engine (`/table` and `/route`).
-
-This module is the only place that talks HTTP to OSRM. It returns plain
-data structures (matrices, segments, durations); higher-level decisions
-(fallback to haversine, cost-matrix selection) live in the service layer.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -33,7 +26,6 @@ def normalize_profile(profile: str) -> str:
 
 
 def _table_matrices_from_json(points: list[dict], data: dict) -> tuple[list[list[float]], list[list[float]]] | None:
-    """Parse OSRM `/table` JSON into km + second matrices, or ``None`` if response is not OK."""
     if data.get("code") != "Ok":
         log.warning("OSRM table failed: %s, falling back to Haversine", data.get("code"))
         return None
@@ -60,11 +52,6 @@ def _table_matrices_from_json(points: list[dict], data: dict) -> tuple[list[list
 async def fetch_matrices(
     points: list[dict], profile: str = "driving"
 ) -> tuple[list[list[float]] | None, list[list[float]] | None]:
-    """Return `(distance_km_matrix, duration_sec_matrix)` from OSRM `/table`.
-
-    On any failure (HTTP error, non-Ok response), returns `(None, None)` so
-    the caller can fall back to a haversine-only matrix.
-    """
     prof = normalize_profile(profile)
     base = settings.osrm_url_for_profile(prof)
     coords = ";".join(f"{p['longitude']},{p['latitude']}" for p in points)
@@ -90,45 +77,63 @@ async def fetch_matrices(
 async def fetch_route_segments(
     ordered_points: list[dict], profile: str = "driving"
 ) -> tuple[list[list[dict]], list[float]]:
-    """Per-leg OSRM `/route` geometry plus per-leg duration (seconds).
+    _geometry, segments, durations = await fetch_route_details(ordered_points, profile)
+    return segments, durations
 
-    On any failure, falls back to straight lines and zero durations.
-    """
+
+async def fetch_route_details(
+    ordered_points: list[dict], profile: str = "driving"
+) -> tuple[list[dict], list[list[dict]], list[float]]:
+    if len(ordered_points) < 2:
+        single = [{"latitude": p["latitude"], "longitude": p["longitude"]} for p in ordered_points]
+        return single, [single] if single else [], []
+
     prof = normalize_profile(profile)
     base = settings.osrm_url_for_profile(prof)
-    if len(ordered_points) < 2:
-        return (
-            [[{"latitude": p["latitude"], "longitude": p["longitude"]} for p in ordered_points]],
-            [],
-        )
+    coords = ";".join(f"{p['longitude']},{p['latitude']}" for p in ordered_points)
+    url = (
+        f"{base}/route/v1/{prof}/{coords}"
+        "?overview=full&geometries=geojson&steps=true&continue_straight=false"
+    )
 
-    segments: list[list[dict]] = []
-    leg_durations_sec: list[float] = []
     try:
         async with httpx.AsyncClient(timeout=settings.http_osrm_timeout_seconds) as client:
-            for a, b in _consecutive_pairs(ordered_points):
-                coords = f"{a['longitude']},{a['latitude']};{b['longitude']},{b['latitude']}"
-                url = f"{base}/route/v1/{prof}/{coords}?overview=full&geometries=geojson"
-
-                response = await client.get(url)
-                response.raise_for_status()
-                data = response.json()
-
-                if data.get("code") == "Ok" and data.get("routes"):
-                    route0 = data["routes"][0]
-                    leg_durations_sec.append(float(route0.get("duration", 0)))
-                    geometry = route0["geometry"]["coordinates"]
-                    segment = [{"latitude": c[1], "longitude": c[0]} for c in geometry]
-                    segments.append(_anchor_segment(segment, a, b))
-                else:
-                    leg_durations_sec.append(0.0)
-                    segments.append(_straight_line(a, b))
+            response = await client.get(url)
+            response.raise_for_status()
+            data = response.json()
     except Exception as exc:
-        log.warning("OSRM segment request failed (%s), falling back to straight lines", exc)
-        segments = [_straight_line(a, b) for a, b in _consecutive_pairs(ordered_points)]
-        leg_durations_sec = [0.0] * (len(ordered_points) - 1)
+        log.warning("OSRM route request failed (%s), falling back to straight lines", exc)
+        return _fallback_route_details(ordered_points)
 
-    return segments, leg_durations_sec
+    if data.get("code") != "Ok" or not data.get("routes"):
+        log.warning("OSRM route failed: %s, falling back to straight lines", data.get("code"))
+        return _fallback_route_details(ordered_points)
+
+    route = data["routes"][0]
+    full_geometry = _coords_from_geojson(route.get("geometry") or {})
+    legs = route.get("legs") or []
+    leg_durations_sec = [float(leg.get("duration", 0)) for leg in legs]
+    segments = _legs_to_segments(legs)
+
+    expected_legs = len(ordered_points) - 1
+    if len(segments) != expected_legs or any(len(seg) < 2 for seg in segments):
+        segments = _split_geometry_by_waypoints(full_geometry, ordered_points)
+
+    if any(len(seg) < 2 for seg in segments):
+        return _fallback_route_details(ordered_points)
+
+    if len(full_geometry) < 2:
+        full_geometry = _merge_segments(segments)
+
+    return full_geometry, segments, leg_durations_sec
+
+
+def _fallback_route_details(
+    ordered_points: list[dict],
+) -> tuple[list[dict], list[list[dict]], list[float]]:
+    segments = [_straight_line(a, b) for a, b in _consecutive_pairs(ordered_points)]
+    full_geometry = _merge_segments(segments)
+    return full_geometry, segments, [0.0] * len(segments)
 
 
 def _consecutive_pairs(points: list[dict]):
@@ -143,22 +148,93 @@ def _straight_line(a: dict, b: dict) -> list[dict]:
     ]
 
 
-def _anchor_segment(segment: list[dict], start: dict, end: dict) -> list[dict]:
-    """Snap segment ends to requested POIs only when OSRM is already close.
+def _coords_from_geojson(geometry: dict) -> list[dict]:
+    raw = geometry.get("coordinates") or []
+    return [{"latitude": c[1], "longitude": c[0]} for c in raw]
 
-    Prepending/appending arbitrary coordinates created short diagonal "chords"
-    off the road network (triangle artifacts at junctions).
-    """
+
+def _append_merged_coords(target: list[dict], points: list[dict]) -> None:
+    for j, point in enumerate(points):
+        if j == 0 and target and is_same_point(
+            target[-1]["latitude"],
+            target[-1]["longitude"],
+            point["latitude"],
+            point["longitude"],
+        ):
+            continue
+        target.append(point)
+
+
+def _legs_to_segments(legs: list[dict]) -> list[list[dict]]:
+    segments: list[list[dict]] = []
+    for leg in legs:
+        leg_coords: list[dict] = []
+        for step in leg.get("steps", []):
+            geom = step.get("geometry")
+            if not geom:
+                continue
+            _append_merged_coords(leg_coords, _coords_from_geojson(geom))
+        segments.append(leg_coords)
+    return segments
+
+
+def _merge_segments(segments: list[list[dict]]) -> list[dict]:
+    merged: list[dict] = []
+    for segment in segments:
+        _append_merged_coords(merged, segment)
+    return merged
+
+
+def _split_geometry_by_waypoints(
+    geometry: list[dict], ordered_points: list[dict]
+) -> list[list[dict]]:
+    if len(geometry) < 2 or len(ordered_points) < 2:
+        return [_straight_line(a, b) for a, b in _consecutive_pairs(ordered_points)]
+
+    split_indices = [0]
+    search_from = 0
+    for waypoint in ordered_points[1:]:
+        best = search_from
+        best_d = float("inf")
+        for i in range(search_from, len(geometry)):
+            d = haversine_distance(
+                geometry[i]["latitude"],
+                geometry[i]["longitude"],
+                waypoint["latitude"],
+                waypoint["longitude"],
+            )
+            if d < best_d:
+                best_d = d
+                best = i
+        split_indices.append(best)
+        search_from = best
+    split_indices[-1] = len(geometry) - 1
+
+    segments: list[list[dict]] = []
+    for i in range(len(split_indices) - 1):
+        start = split_indices[i]
+        end = split_indices[i + 1]
+        if end <= start:
+            segments.append(_straight_line(ordered_points[i], ordered_points[i + 1]))
+            continue
+        segments.append(list(geometry[start : end + 1]))
+    return segments
+
+
+# Kept for unit tests — no longer used in the live routing path.
+SNAP_RADIUS_KM = 0.12
+
+
+def _anchor_segment(segment: list[dict], start: dict, end: dict) -> list[dict]:
     if not segment:
         return _straight_line(start, end)
 
     anchored = list(segment)
-    snap_km = 0.12
 
     d0_km = haversine_distance(
         start["latitude"], start["longitude"], anchored[0]["latitude"], anchored[0]["longitude"]
     )
-    if d0_km <= snap_km or is_same_point(
+    if d0_km <= SNAP_RADIUS_KM or is_same_point(
         anchored[0]["latitude"], anchored[0]["longitude"], start["latitude"], start["longitude"]
     ):
         anchored[0] = {"latitude": start["latitude"], "longitude": start["longitude"]}
@@ -166,9 +242,28 @@ def _anchor_segment(segment: list[dict], start: dict, end: dict) -> list[dict]:
     d1_km = haversine_distance(
         end["latitude"], end["longitude"], anchored[-1]["latitude"], anchored[-1]["longitude"]
     )
-    if d1_km <= snap_km or is_same_point(
+    if d1_km <= SNAP_RADIUS_KM or is_same_point(
         anchored[-1]["latitude"], anchored[-1]["longitude"], end["latitude"], end["longitude"]
     ):
         anchored[-1] = {"latitude": end["latitude"], "longitude": end["longitude"]}
 
-    return anchored
+    return _trim_tail_loop(anchored, end)
+
+
+def _trim_tail_loop(segment: list[dict], end: dict) -> list[dict]:
+    if len(segment) < 3:
+        return segment
+
+    best_i = 0
+    best_d = float("inf")
+    for i, point in enumerate(segment):
+        d = haversine_distance(
+            point["latitude"], point["longitude"], end["latitude"], end["longitude"]
+        )
+        if d < best_d:
+            best_d = d
+            best_i = i
+
+    trimmed = segment[: best_i + 1]
+    trimmed[-1] = {"latitude": end["latitude"], "longitude": end["longitude"]}
+    return trimmed

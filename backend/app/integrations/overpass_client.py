@@ -1,5 +1,3 @@
-"""HTTP client for the Overpass API (OpenStreetMap query → JSON)."""
-
 from __future__ import annotations
 
 from typing import Any

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import shutil
+
 from app.core.config import settings
 
 ID_CARD_NAME = "id_card.jpg"
@@ -41,3 +43,9 @@ def document_urls(user_id: int) -> tuple[str | None, str | None]:
         else None
     )
     return id_url, selfie_url
+
+
+def delete_user_files(user_id: int) -> None:
+    directory = _user_dir(user_id)
+    if directory.exists():
+        shutil.rmtree(directory, ignore_errors=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.config import settings
-from app.face import pick_best_face
+from app.vision import pick_best_face
 from app.models import FaceQuality, VerificationStatus
 from app.services import verification_service as svc
 from types import SimpleNamespace
@@ -15,10 +15,10 @@ def test_clamp_score() -> None:
     assert svc._clamp_score(1.4) == 1.0
 
 
-def test_decide_sends_good_scores_to_manual_review() -> None:
+def test_decide_auto_approves_good_match_with_quality() -> None:
     status, reason = svc._decide(0.60, quality_ok=True)
-    assert status == VerificationStatus.MANUAL_REVIEW
-    assert "admin" in reason.lower()
+    assert status == VerificationStatus.APPROVED
+    assert "insightface" in reason.lower()
 
 
 def test_decide_rejects_low_score() -> None:

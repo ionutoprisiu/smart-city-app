@@ -1,5 +1,3 @@
-"""Smoke test: the /health endpoint is reachable and returns a valid payload."""
-
 from __future__ import annotations
 
 from fastapi.testclient import TestClient

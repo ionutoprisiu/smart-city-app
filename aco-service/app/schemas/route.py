@@ -1,8 +1,8 @@
-"""Pydantic models for `/optimize` requests and responses."""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.core.route_start import ROUTE_START_LATITUDE, ROUTE_START_LONGITUDE
 
 MAX_ATTRACTIONS = 50
 
@@ -17,11 +17,9 @@ class OptimizeRequest(BaseModel):
     attractions: list[AttractionRequest] = Field(..., min_length=1, max_length=MAX_ATTRACTIONS)
     startLatitude: float | None = Field(default=None, ge=-90, le=90)
     startLongitude: float | None = Field(default=None, ge=-180, le=180)
+    startName: str | None = Field(default=None, max_length=200)
     useOsrm: bool = Field(default=True)
-    routingProfile: str = Field(
-        default="driving",
-        description="Accepted values: 'driving' | 'foot'.",
-    )
+    routingProfile: str = Field(default="driving")
 
     @field_validator("routingProfile")
     @classmethod
@@ -33,9 +31,10 @@ class OptimizeRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_minimum_points(self) -> OptimizeRequest:
-        has_start = self.startLatitude is not None and self.startLongitude is not None
-        if len(self.attractions) < 2 and not has_start:
-            raise ValueError("Provide at least 2 attractions, or 1 attraction with a start location")
+        self.startLatitude = ROUTE_START_LATITUDE
+        self.startLongitude = ROUTE_START_LONGITUDE
+        if len(self.attractions) < 1:
+            raise ValueError("At least 1 attraction required")
         return self
 
 

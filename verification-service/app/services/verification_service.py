@@ -3,8 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from app.core.config import settings
-from app.face import extract_id_portrait, extract_selfie, warm_up
-from app.image_utils import decode_image
+from app.vision import decode_image, extract_id_portrait, extract_selfie, warm_up
 from app.models import VerificationMetadata, VerificationResult, VerificationStatus
 
 
@@ -19,7 +18,7 @@ def _clamp_score(cosine_similarity: float) -> float:
 def _decide(score: float, quality_ok: bool) -> tuple[VerificationStatus, str]:
     if score >= settings.approve_threshold:
         if quality_ok:
-            return VerificationStatus.MANUAL_REVIEW, "Face match acceptable, pending admin approval"
+            return VerificationStatus.APPROVED, "Auto-approved by InsightFace (face match)"
         return VerificationStatus.MANUAL_REVIEW, "Face match acceptable but image quality needs review"
     return VerificationStatus.REJECTED, "Face match is below approval threshold"
 

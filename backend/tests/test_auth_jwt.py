@@ -1,5 +1,3 @@
-"""Auth: password hashing and JWT issuance."""
-
 from __future__ import annotations
 
 import uuid

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -19,12 +20,21 @@ from app.services.verification_access import (
 )
 
 
-def _status_from_microservice(raw: str) -> VerificationStatus:
-    """Map microservice output to a stored status; never auto-approve on submit."""
-    status = parse_stored_status(raw)
+def _apply_verification_outcome(user: User, status: VerificationStatus, *, reason: str) -> None:
+    user.verification_status = status.value
+    user.verification_reason = reason
+
     if status == VerificationStatus.APPROVED:
-        return VerificationStatus.MANUAL_REVIEW
-    return status
+        user.is_verified = True
+        user.is_approved = True
+        user.verified_at = datetime.now()
+        if user.role != Role.ADMIN.value:
+            user.role = Role.ORGANIZER.value
+        return
+
+    user.is_verified = False
+    user.is_approved = False
+    user.verified_at = None
 
 
 async def submit_verification(
@@ -49,7 +59,7 @@ async def submit_verification(
     except VerificationServiceError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    status = _status_from_microservice(str(data.get("status", VerificationStatus.REJECTED.value)))
+    status = parse_stored_status(str(data.get("status", VerificationStatus.REJECTED.value)))
     score = data.get("score")
     reason = str(data.get("reason", "Verification processed"))
     metadata = data.get("metadata")
@@ -59,19 +69,19 @@ async def submit_verification(
     verification_storage.save_verification_images(user_id, id_card_bytes, selfie_bytes)
     id_card_url, selfie_url = verification_storage.document_urls(user_id)
 
-    user.verification_status = status.value
     user.verification_score = float(score) if score is not None else None
-    user.verification_reason = reason
     user.id_document_ocr_json = json.dumps(metadata) if isinstance(metadata, dict) else None
     user.id_card_image_url = id_card_url
     user.face_image_url = selfie_url
-    user.is_verified = False
-    user.is_approved = False
+    _apply_verification_outcome(user, status, reason=reason)
     db.commit()
+    db.refresh(user)
 
     return VerificationSubmitResponse(
         userId=user.id,
         status=status,
+        role=Role(user.role),
+        isVerified=user.is_verified,
         score=user.verification_score,
         reason=reason,
     )

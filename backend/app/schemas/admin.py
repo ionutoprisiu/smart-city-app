@@ -38,3 +38,10 @@ class AdminUserItem(BaseModel):
 
 class AdminUserListResponse(BaseModel):
     items: list[AdminUserItem]
+
+
+class AdminUserUpdateRequest(BaseModel):
+    email: str | None = Field(default=None, min_length=3, max_length=255)
+    firstName: str | None = Field(default=None, min_length=1, max_length=100)
+    lastName: str | None = Field(default=None, min_length=1, max_length=100)
+    role: Role | None = None

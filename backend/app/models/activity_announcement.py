@@ -8,8 +8,6 @@ from app.db.base import Base
 
 
 class ActivityAnnouncement(Base):
-    """Organizer announcement tied to exactly one event OR one club."""
-
     __tablename__ = "activity_announcements"
     __table_args__ = (
         CheckConstraint(

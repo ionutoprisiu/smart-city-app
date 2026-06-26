@@ -1,5 +1,3 @@
-"""Password hashing (bcrypt via passlib) and JWT access tokens (HS256)."""
-
 from __future__ import annotations
 
 import secrets
@@ -18,9 +16,9 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, stored_hash: str) -> bool:
-    """Verify bcrypt hash; supports legacy plaintext rows (dev DB) with timing-safe compare."""
     if stored_hash.startswith(("$2a$", "$2b$", "$2y$")):
         return _pwd_context.verify(plain_password, stored_hash)
+    # legacy dev rows may store plaintext
     return secrets.compare_digest(plain_password, stored_hash)
 
 

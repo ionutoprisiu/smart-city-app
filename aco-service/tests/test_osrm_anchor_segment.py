@@ -1,5 +1,3 @@
-"""Unit tests for ``osrm_client._anchor_segment`` snapping behaviour."""
-
 from __future__ import annotations
 
 from app.integrations.osrm_client import _anchor_segment, _straight_line
@@ -46,3 +44,18 @@ def test_anchor_does_not_snap_when_far_from_poi() -> None:
     out = _anchor_segment(seg, start, end)
     assert out[0] == seg[0]
     assert out[-1] == seg[-1]
+
+
+def test_anchor_trims_tail_loop_past_destination() -> None:
+    start = {"latitude": 46.77, "longitude": 23.59}
+    end = {"latitude": 46.771, "longitude": 23.591}
+    seg = [
+        {"latitude": 46.77, "longitude": 23.59},
+        {"latitude": 46.7705, "longitude": 23.5905},
+        {"latitude": 46.771, "longitude": 23.591},
+        {"latitude": 46.7708, "longitude": 23.5908},
+        {"latitude": 46.7706, "longitude": 23.5906},
+    ]
+    out = _anchor_segment(seg, start, end)
+    assert len(out) == 3
+    assert out[-1] == {"latitude": end["latitude"], "longitude": end["longitude"]}

@@ -1,18 +1,9 @@
-"""Nearest-neighbor heuristic for the open-tour TSP.
-
-Greedy baseline used to benchmark the ACO optimizer: starting from index 0,
-repeatedly move to the closest not-yet-visited point according to the cost
-matrix. Same interface as ``ACOOptimizer.optimize`` (route anchored at 0 plus
-accumulated cost) so the two can be compared on identical inputs.
-"""
-
 from __future__ import annotations
 
 from app.common.distance import calculate_route_cost
 
 
 def nearest_neighbor(cost_matrix: list[list[float]]) -> tuple[list[int], float]:
-    """Build a tour greedily from index 0; return ``(route, cost)``."""
     if not cost_matrix:
         raise ValueError("Cost matrix cannot be empty")
     if len(cost_matrix) < 2:

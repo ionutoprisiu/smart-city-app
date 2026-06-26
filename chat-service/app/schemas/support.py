@@ -1,5 +1,3 @@
-"""Pydantic models for in-process support Q&A matching."""
-
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -15,5 +13,12 @@ class SupportQaCandidate(BaseModel):
 
 class SupportMatchResponse(BaseModel):
     matchedQuestionId: int | None = None
+    confidence: float = 0.0
+    reason: str = ""
+
+
+class ContextAnswerResponse(BaseModel):
+    canAnswer: bool = False
+    answer: str = ""
     confidence: float = 0.0
     reason: str = ""

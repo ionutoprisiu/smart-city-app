@@ -1,5 +1,3 @@
-"""Club membership approval for APPROVAL_REQUIRED clubs."""
-
 from __future__ import annotations
 
 import importlib

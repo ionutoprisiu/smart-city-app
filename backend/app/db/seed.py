@@ -1,5 +1,3 @@
-"""Optional seed users for local / empty databases (controlled via settings)."""
-
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -12,8 +10,6 @@ from app.models.enums import AttractionCategory, Role
 from app.models.tourist_attraction import TouristAttraction
 from app.models.user import User
 
-# Fixed, well-known Cluj-Napoca landmarks used as a fallback so the app is never
-# empty before the first Overpass sync runs. High importance_score keeps them on top.
 _CORE_ATTRACTIONS: list[dict] = [
     {"name": "Biserica Sfântul Mihail", "lat": 46.7693, "lon": 23.5897, "cat": AttractionCategory.CHURCH, "visit": 30},
     {"name": "Statuia lui Matei Corvin", "lat": 46.7695, "lon": 23.5894, "cat": AttractionCategory.MONUMENT, "visit": 15},
@@ -91,8 +87,6 @@ def seed_admin_user_if_enabled(db: Session) -> None:
 
 
 def seed_core_attractions_if_empty(db: Session) -> None:
-    """Insert a fixed set of Cluj landmarks when the catalog is empty, so the app
-    has content before the first Overpass sync. Skipped if any attraction exists."""
     count = db.execute(select(func.count()).select_from(TouristAttraction)).scalar_one()
     if count and int(count) > 0:
         return

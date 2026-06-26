@@ -107,7 +107,6 @@ def _parse_element(element: Mapping[str, Any]) -> TouristAttraction | None:
     )
 
 
-# Base relevance per category (touristic value); food/shopping rank lower.
 _CATEGORY_BASE_SCORE: dict[AttractionCategory, float] = {
     AttractionCategory.MUSEUM: 5.0,
     AttractionCategory.FORTRESS: 5.0,
@@ -126,7 +125,6 @@ _CATEGORY_BASE_SCORE: dict[AttractionCategory, float] = {
 
 
 def _compute_importance(tags: dict[str, Any], category: AttractionCategory) -> float:
-    """Heuristic 0..~12 score from OSM tags; notable, well-documented POIs rank higher."""
     score = _CATEGORY_BASE_SCORE.get(category, 1.0)
     if tags.get("wikidata"):
         score += 3.0

@@ -1,5 +1,3 @@
-"""FastAPI dependencies shared across routes."""
-
 from collections.abc import Generator
 
 from fastapi import Depends, HTTPException
@@ -16,7 +14,6 @@ http_bearer = HTTPBearer(auto_error=False)
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Yield a request-scoped DB session and always close it after the response."""
     db = SessionLocal()
     try:
         yield db
@@ -27,7 +24,6 @@ def get_db() -> Generator[Session, None, None]:
 def get_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
 ) -> int:
-    """Resolve the authenticated user id from a Bearer JWT (``sub`` claim)."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -46,7 +42,6 @@ def get_current_user_id(
 def get_optional_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
 ) -> int | None:
-    """Same as ``get_current_user_id`` but returns ``None`` when no Bearer token is sent."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         return None
     try:
@@ -66,7 +61,6 @@ def require_admin_user_id(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> int:
-    """Require the authenticated user to have the ADMIN role."""
     user = db.get(User, user_id)
     if user is None or user.role != Role.ADMIN.value:
         raise HTTPException(status_code=403, detail="Admin access required")

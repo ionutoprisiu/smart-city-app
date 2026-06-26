@@ -1,5 +1,3 @@
-"""Verification status API behaviour."""
-
 from __future__ import annotations
 
 from datetime import datetime

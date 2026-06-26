@@ -1,1 +1,0 @@
-"""ACO route optimization microservice."""

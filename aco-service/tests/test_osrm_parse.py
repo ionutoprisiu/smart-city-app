@@ -1,5 +1,3 @@
-"""Unit tests for OSRM response parsing and profile normalization."""
-
 from __future__ import annotations
 
 import pytest

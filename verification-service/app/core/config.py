@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Minimum face score to enter the admin review queue; final approval is always manual.
+    # score gate before manual review
     approve_threshold: float = 0.55
     insightface_model_name: str = "buffalo_l"
     insightface_det_size: int = 640

@@ -1,5 +1,3 @@
-"""HTTP client for the ACO route optimization microservice."""
-
 from __future__ import annotations
 
 import logging
@@ -15,7 +13,7 @@ HTTP_TIMEOUT_SECONDS = 120.0
 
 
 class AcoServiceError(RuntimeError):
-    """Raised when the ACO service is unavailable or returns an HTTP error."""
+    pass
 
 
 def optimize(payload: dict[str, Any]) -> dict[str, Any]:

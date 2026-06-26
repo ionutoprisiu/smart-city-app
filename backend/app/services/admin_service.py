@@ -2,18 +2,26 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.models.activity_announcement import ActivityAnnouncement
+from app.models.activity_chat_message import ActivityChatMessage
+from app.models.activity_event import ActivityEvent
+from app.models.club import Club
+from app.models.event_participation import EventParticipation
+from app.models.club_membership import ClubMembership
 from app.models.enums import Role, VerificationStatus
 from app.models.user import User
 from app.schemas.admin import (
     AdminUserItem,
     AdminUserListResponse,
+    AdminUserUpdateRequest,
     AdminVerificationItem,
     AdminVerificationListResponse,
 )
 from app.services import verification_storage
+from app.services.activities_service import _purge_club_data, _purge_event_data
 
 _REVIEWABLE = frozenset(
     {
@@ -59,6 +67,8 @@ def approve_verification(db: Session, user_id: int) -> AdminVerificationItem:
     user.is_approved = True
     user.verified_at = now
     user.verification_reason = "Approved by admin"
+    if user.role != Role.ADMIN.value:
+        user.role = Role.ORGANIZER.value
     db.commit()
     db.refresh(user)
     return _verification_item(user)
@@ -148,6 +158,105 @@ def reset_user_verification(db: Session, user_id: int) -> AdminUserItem:
     db.commit()
     db.refresh(user)
     return _user_item(user)
+
+
+def update_user(
+    db: Session,
+    user_id: int,
+    body: AdminUserUpdateRequest,
+    actor_admin_id: int,
+) -> AdminUserItem:
+    user = _get_user_or_raise(db, user_id)
+    if body.role is not None and user.id == actor_admin_id:
+        raise ValueError("Cannot change your own role")
+    if body.email is not None:
+        email = body.email.strip().lower()
+        if not email:
+            raise ValueError("Email is required")
+        existing = db.execute(
+            select(User).where(User.email == email, User.id != user_id)
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise ValueError("Email already in use")
+        user.email = email
+    if body.firstName is not None:
+        user.first_name = body.firstName.strip()
+    if body.lastName is not None:
+        user.last_name = body.lastName.strip()
+    if body.firstName is not None or body.lastName is not None:
+        user.name = f"{user.first_name} {user.last_name}".strip()
+    if body.role is not None:
+        if user.role == Role.ADMIN.value:
+            raise ValueError("Cannot change admin role")
+        if body.role == Role.ADMIN:
+            raise ValueError("Cannot promote to admin")
+        if body.role == Role.ORGANIZER:
+            if user.verification_status != VerificationStatus.APPROVED.value or not user.is_verified:
+                raise ValueError("User must be verified before becoming organizer")
+            user.role = Role.ORGANIZER.value
+        elif body.role == Role.USER:
+            if user.role == Role.ORGANIZER.value:
+                _clear_verification_state(
+                    user,
+                    reason="Organizer role removed; identity verification required again",
+                )
+            user.role = Role.USER.value
+    db.commit()
+    db.refresh(user)
+    return _user_item(user)
+
+
+def delete_user(db: Session, user_id: int, actor_admin_id: int) -> None:
+    user = _get_user_or_raise(db, user_id)
+    if user.id == actor_admin_id:
+        raise ValueError("Cannot delete your own account")
+    if user.role == Role.ADMIN.value:
+        raise ValueError("Cannot delete admin user")
+    _purge_user_associations(db, user_id)
+    verification_storage.delete_user_files(user_id)
+    db.delete(user)
+    db.commit()
+
+
+def _purge_user_associations(db: Session, user_id: int) -> None:
+    events = db.execute(
+        select(ActivityEvent).where(ActivityEvent.created_by == user_id)
+    ).scalars().all()
+    for event in events:
+        _purge_event_data(db, event.id)
+        db.delete(event)
+
+    clubs = db.execute(select(Club).where(Club.created_by == user_id)).scalars().all()
+    for club in clubs:
+        _purge_club_data(db, club.id)
+        db.delete(club)
+
+    db.execute(delete(ActivityAnnouncement).where(ActivityAnnouncement.created_by == user_id))
+
+    message_ids = db.execute(
+        select(ActivityChatMessage.id).where(
+            or_(
+                ActivityChatMessage.sender_user_id == user_id,
+                ActivityChatMessage.thread_user_id == user_id,
+            )
+        )
+    ).scalars().all()
+    if message_ids:
+        db.execute(
+            update(ActivityChatMessage)
+            .where(ActivityChatMessage.in_reply_to_message_id.in_(message_ids))
+            .values(in_reply_to_message_id=None)
+        )
+    db.execute(
+        delete(ActivityChatMessage).where(
+            or_(
+                ActivityChatMessage.sender_user_id == user_id,
+                ActivityChatMessage.thread_user_id == user_id,
+            )
+        )
+    )
+    db.execute(delete(ClubMembership).where(ClubMembership.user_id == user_id))
+    db.execute(delete(EventParticipation).where(EventParticipation.user_id == user_id))
 
 
 def _clear_verification_state(user: User, *, reason: str) -> None:

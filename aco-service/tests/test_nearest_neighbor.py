@@ -1,5 +1,3 @@
-"""Unit tests for the nearest-neighbor baseline."""
-
 from __future__ import annotations
 
 import pytest
@@ -31,7 +29,6 @@ def test_route_is_anchored_at_zero_and_visits_all() -> None:
 
 
 def test_greedy_picks_closest_next() -> None:
-    # From 0 the closest is 1 (1.0), then from 1 closest unvisited is 2 (1.0).
     matrix = [
         [0.0, 1.0, 5.0],
         [1.0, 0.0, 1.0],

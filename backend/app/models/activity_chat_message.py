@@ -20,6 +20,7 @@ class ActivityChatMessage(Base):
     event_id: Mapped[int | None] = mapped_column(ForeignKey("activity_events.id"), nullable=True)
     club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"), nullable=True)
     sender_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    thread_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # USER | ORGANIZER
     body: Mapped[str] = mapped_column(Text, nullable=False)
     in_reply_to_message_id: Mapped[int | None] = mapped_column(
@@ -27,4 +28,5 @@ class ActivityChatMessage(Base):
         nullable=True,
     )
     is_auto_reply: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now)

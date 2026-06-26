@@ -9,6 +9,13 @@ from sqlalchemy.orm import Session
 from app.integrations.aco_client import AcoServiceError, optimize as aco_optimize
 from app.models.tourist_attraction import TouristAttraction
 
+from app.core.route_start import (
+    ROUTE_START_LATITUDE,
+    ROUTE_START_LONGITUDE,
+    ROUTE_START_NAME,
+    start_label_for,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -18,16 +25,18 @@ def optimize_route(
     start_lat: float | None,
     start_lon: float | None,
     routing_profile: str,
+    start_name: str | None = None,
 ) -> dict[str, Any]:
     if not attraction_ids:
         raise ValueError("At least 1 attraction required")
-    has_start = start_lat is not None and start_lon is not None
-    if len(attraction_ids) < 2 and not has_start:
-        raise ValueError("Provide at least 2 attractions, or 1 attraction with a start location")
+
+    start_lat = ROUTE_START_LATITUDE
+    start_lon = ROUTE_START_LONGITUDE
+    start_name = ROUTE_START_NAME
 
     profile = _normalize_routing_profile(routing_profile)
     attractions = _find_attractions_ordered(db, attraction_ids)
-    body = _build_aco_body(attractions, start_lat, start_lon, profile)
+    body = _build_aco_body(attractions, start_lat, start_lon, profile, start_name)
 
     log.info("Calling ACO optimize with routingProfile=%s", profile)
     try:
@@ -36,7 +45,7 @@ def optimize_route(
         raise RuntimeError(str(exc)) from exc
 
     response = _parse_aco_response(raw)
-    _enrich_step_names(response, attractions)
+    _enrich_step_names(response, attractions, start_lat, start_lon, start_name)
     log.info("Route optimized: %s km, %s min", response.get("totalDistance"), response.get("totalTime"))
     return response
 
@@ -74,6 +83,7 @@ def _build_aco_body(
     start_lat: float | None,
     start_lon: float | None,
     routing_profile: str,
+    start_name: str | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "attractions": [
@@ -85,11 +95,14 @@ def _build_aco_body(
             for a in attractions
         ],
         "routingProfile": routing_profile,
+        "useOsrm": True,
     }
     if start_lat is not None:
         body["startLatitude"] = start_lat
     if start_lon is not None:
         body["startLongitude"] = start_lon
+    if start_name and start_name.strip():
+        body["startName"] = start_name.strip()
     return body
 
 
@@ -137,11 +150,17 @@ def _parse_aco_response(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _enrich_step_names(response: dict[str, Any], attractions: list[TouristAttraction]) -> None:
+def _enrich_step_names(
+    response: dict[str, Any],
+    attractions: list[TouristAttraction],
+    start_lat: float,
+    start_lon: float,
+    start_name: str | None,
+) -> None:
     name_map = {a.id: a.name for a in attractions}
     for step in response["steps"]:
         attraction_id = int(step["attractionId"])
         if attraction_id == 0:
-            step["attractionName"] = "Your Location"
+            step["attractionName"] = start_label_for(start_lat, start_lon, start_name)
         else:
             step["attractionName"] = name_map.get(attraction_id, "Unknown")

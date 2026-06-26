@@ -24,11 +24,12 @@ def submit_eligibility(user: User) -> tuple[bool, str | None]:
         return False, "Upload is locked until an admin allows a new submission."
     if status == VerificationStatus.APPROVED:
         return False, "Your identity is already verified."
+    if status == VerificationStatus.PENDING:
+        return False, "Your verification is pending."
     return False, "Upload is not available right now."
 
 
 def organizer_flow_eligibility(user: User) -> tuple[bool, str | None]:
-    """Whether the user may open the organizer / verification screen."""
     if user.role in (Role.ADMIN.value, Role.ORGANIZER.value):
         return False, "You are already an organizer."
 

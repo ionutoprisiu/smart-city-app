@@ -1,12 +1,6 @@
 # Smart City App
 
-Full-stack thesis project for smart tourism in Cluj-Napoca:
-
-- user auth + profile
-- attraction discovery and map exploration
-- route optimization (ACO + OSRM)
-- ID verification (ID card + selfie)
-- iOS mobile app in React Native
+Licență — turism urban în Cluj-Napoca: atracții, traseu optim (ACO + OSRM), verificare CI/selfie, evenimente și chat cu organizatorii. Client web în React (`frontend-web`).
 
 ## Repository Layout
 
@@ -16,8 +10,8 @@ smart-city-app/
 ├── aco-service/           # FastAPI microservice for route optimization (port 8000)
 ├── chat-service/          # FastAPI + Socket.IO for activity chat + LLM auto-reply (port 8002)
 ├── verification-service/  # FastAPI microservice for identity verification (port 8090)
-├── frontend/              # React Native (iOS) client app
-├── admin-web/             # Vite + React admin panel (port 8095)
+├── frontend-web/          # Vite + React user app (port 8096)
+├── control-web/           # Vite + React control panel (port 8095)
 ├── osrm-service/          # OSRM graph data + prepare (see data/)
 └── docker-compose.yml     # Full local stack
 ```
@@ -26,23 +20,9 @@ smart-city-app/
 
 ### Backend (`backend`)
 
-Modular FastAPI service with layers:
+FastAPI, structură pe straturi (`api/`, `services/`, `integrations/`, `db/`, `models/`, `schemas/`).
 
-- `api/` routes + deps + HTTP errors
-- `services/` business use-cases
-- `integrations/` outbound clients (`aco`, `verification`, `overpass`)
-- `db/` SQLAlchemy setup + schema updates + seed
-- `models/` ORM entities
-- `schemas/` Pydantic DTOs
-- `common/` shared exceptions
-
-Primary responsibilities:
-
-- auth (`/api/auth/*`)
-- visit-city listing/filter; full Cluj catalog synced from Overpass on backend startup (`SYNC_ATTRACTIONS_ON_STARTUP`, default `true`)
-- route optimization orchestration (`backend -> aco-service`)
-- verification orchestration (`backend -> verification-service`)
-- activities (events/clubs); support chat via `chat-service` (REST history + Socket.IO + in-process LLM auto-reply)
+Expune auth, catalog Visit City (sync Overpass la startup dacă `SYNC_ATTRACTIONS_ON_STARTUP=true`), optimizare traseu (apelează `aco-service`), verificare identitate (`verification-service`), CRUD evenimente/grupuri. Chat-ul live e în `chat-service`, nu aici.
 
 ### ACO Service (`aco-service`)
 
@@ -50,8 +30,11 @@ FastAPI microservice that computes optimized route order:
 
 - builds cost matrix via OSRM `/table`
 - runs Ant Colony Optimization (anchored at start point index 0)
-- fetches per-leg geometry via OSRM `/route`
+- fetches **one multi-waypoint** route via OSRM `/route` (`steps=true`) and splits geometry per leg
+- returns `routeGeometry` (full path) and `routeSegments` (per-leg polylines)
 - falls back to Haversine when OSRM is unavailable
+
+See [docs/traseu-si-harta.md](../docs/traseu-si-harta.md) for map rendering details.
 
 ### Verification Service (`verification-service`)
 
@@ -62,35 +45,38 @@ FastAPI microservice for face-only identity checks:
 
 Layout:
 
-- `app/models.py` — result types and thresholds input
-- `app/image_utils.py` — decode and preprocess images
-- `app/face.py` — detection, embedding extraction
+- `app/models/` — result types and domain enums
+- `app/vision/` — decode, preprocess, face detection and embedding extraction
 - `app/services/verification_service.py` — orchestration
 
 ### Chat Service (`chat-service`)
 
-- activity support chat (REST + Socket.IO)
-- semantic auto-reply via **Ollama** (`LLM_BASE_URL`, typically `http://host.docker.internal:11434/v1` on the host)
-- lexical fallback when the LLM is unavailable
+Support chat per eveniment/grup: istoric REST, mesaje live Socket.IO. Auto-reply opțional prin Ollama pe Mac (`LLM_MODEL=qwen2.5:7b-instruct`, `LLM_BASE_URL`); dacă modelul nu răspunde, rămân reguli lexicale și fallback din istoric Q&A.
 
-### Frontend (`frontend`)
+### Frontend Web (`frontend-web`)
 
-React Native + TypeScript app (iOS-first):
+Vite + React + TypeScript user-facing app:
 
 - auth flow (login/register/verification gate)
-- visit-city list + filters + map + route steps
-- activities (events/clubs) with support chat toward organizers
-- profile and verification screens
-- shared API client, storage, theming, validators
+- visit-city list + filters + Leaflet map + route optimization
+- **map route display**: OSRM road geometry, colored legs, parallel lane offset (see `docs/traseu-si-harta.md`)
+- activities (events/clubs) with support chat toward organizers (Socket.IO)
+- profile and verification screens (file upload)
+- Zustand stores, shared API client, light theme for presentation
 
-### Admin Web (`admin-web`)
+Served on port **8096** in Docker (nginx proxies `/api` → backend).
 
-Vite + React panel for operators:
+### Control Web (`control-web`)
+
+Vite + React panel for operators and evaluation:
 
 - login with seeded admin account (`admin@admin.com` / `ADMIN_USER_PASSWORD`)
-- review identity verifications in `MANUAL_REVIEW` (approve / reject)
-- optional user list + promote verified users to organizer
-- served on port **8095** (nginx proxies `/api` → backend)
+- review `MANUAL_REVIEW` / `REJECTED` verifications; view auto-approved (`APPROVED`) cases
+- **Users**: edit (name, email, role), delete, promote/demote, reset verification
+- **Algorithms** — ACO/PSO benchmark lab (proxies `/research` → `aco-service`)
+- served on port **8095** (nginx proxies `/api` → backend, `/research` → aco-service)
+
+See [docs/control-panel.md](../docs/control-panel.md).
 
 ## API Overview
 
@@ -107,7 +93,11 @@ Vite + React panel for operators:
 - `POST /api/admin/verifications/{user_id}/approve` (admin JWT)
 - `POST /api/admin/verifications/{user_id}/reject` (admin JWT)
 - `GET /api/admin/users` (admin JWT)
+- `PATCH /api/admin/users/{user_id}` (admin JWT)
+- `DELETE /api/admin/users/{user_id}` (admin JWT)
 - `POST /api/admin/users/{user_id}/promote-organizer` (admin JWT)
+- `POST /api/admin/users/{user_id}/demote-user` (admin JWT)
+- `POST /api/admin/users/{user_id}/reset-verification` (admin JWT)
 - `GET /health`
 
 ### Chat Service (8002)
@@ -115,12 +105,14 @@ Vite + React panel for operators:
 - `GET /api/v1/events/{eventId}/messages` — chat history (JWT)
 - `GET /api/v1/clubs/{clubId}/messages` — chat history (JWT)
 - Socket.IO: `chat_join`, `chat_leave`, `chat_send` → `chat:message` (JWT in connect `auth.token`)
-- in-process LLM match for organizer auto-reply (Ollama + lexical fallback)
+- auto-reply: întâi caută răspunsuri manuale similare din același eveniment/grup; dacă nu găsește, extrage din descriere + anunțuri
 - `GET /health`
 
 ### ACO Service (8000)
 
 - `POST /optimize`
+- `GET /research/sets` — benchmark catalog (used by control-web)
+- `POST /research/compare` — offline algorithm comparison
 - `GET /health`
 
 ### Verification Service (8090)
@@ -133,8 +125,7 @@ Vite + React panel for operators:
 ### Prerequisites
 
 - Docker Desktop
-- Xcode (for iOS run)
-- Node.js 22+ (for frontend)
+- Node.js 22+ (optional, for local frontend dev)
 
 ### 1) Configure environment
 
@@ -142,7 +133,7 @@ Vite + React panel for operators:
 cp .env.example .env
 ```
 
-Root `.env` controls PostgreSQL and OSRM dataset names (`OSM_FILE` / `OSM_DATASET`; default Romania extract in `osrm-service/data/source/`).
+Copiază variabilele din `.env.example`, apoi ajustează parolele. Compose încarcă `.env` și suprascrie doar ce ține de rețeaua Docker (host `postgres`, URL-uri interne). Pentru OSRM: `OSM_FILE` / `OSM_DATASET` — vezi `osrm-service/data/source/`.
 
 ### 2) Start full services stack
 
@@ -164,40 +155,26 @@ curl http://localhost:8000/health
 curl http://localhost:8002/health
 curl http://localhost:8090/health
 curl http://localhost:8095/
+curl http://localhost:8096/
 ```
 
-Admin panel: open `http://localhost:8095` and sign in with the seeded admin credentials from `.env` (`ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD`).
+User app: open `http://localhost:8096`. Control panel: open `http://localhost:8095` and sign in with the seeded admin credentials from `.env` (`ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD`).
 
 Local dev (hot reload, proxies API to backend on 8080):
 
 ```bash
-cd admin-web && npm install && npm run dev
+cd frontend-web && npm install && npm run dev
+# or
+cd control-web && npm install && npm run dev
 ```
 
-## Run Frontend (iOS)
+## Teste
+
+În `frontend-web/` și `control-web/`:
 
 ```bash
-cd frontend
-npm install
-cd ios && pod install && cd ..
-npm start
-npx react-native run-ios --device "Ionut’s iPhone" --no-packager
-```
-
-For physical iPhone, backend base URL is set in:
-
-- `frontend/src/shared/api/config.ts`
-
-Use your Mac LAN IP in the same Wi-Fi network as the phone. Chat uses port **8002** (`frontend/src/shared/api/chatConfig.ts`, same `LOCAL_IP` as the API).
-
-## Quality Gates
-
-In `frontend/`:
-
-```bash
-npm run lint
+npm run build
 npm run typecheck
-npm test -- --runInBand
 ```
 
 Backend / chat (pytest inside Docker, same images as compose):
@@ -209,11 +186,14 @@ docker exec smart-city-backend pytest tests/ -q
 docker exec smart-city-chat python -m pytest tests/ -q
 ```
 
-## Notes
+## Documentație suplimentară
 
-- Project currently targets iOS for mobile client.
-- This repository uses a single top-level README by design.
+| Document | Conținut |
+|----------|----------|
+| [docs/traseu-si-harta.md](../docs/traseu-si-harta.md) | OSRM, geometrie traseu, vizualizare Leaflet |
+| [docs/control-panel.md](../docs/control-panel.md) | Control Panel, API admin, Algorithms |
+| [osrm-service/README.md](osrm-service/README.md) | Pregătire graf OSRM |
 
-## License
+## Note
 
-Private / educational use.
+Un singur README la rădăcina `app/`. Folderul `frontend/` (React Native, legacy) nu mai face parte din fluxul principal; folosește `frontend-web`.

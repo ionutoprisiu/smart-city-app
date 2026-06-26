@@ -50,8 +50,11 @@ def become_organizer(
 
 
 @router.get("/events", response_model=list[EventResponse])
-def list_events(db: Session = Depends(get_db)) -> list[EventResponse]:
-    return activities_service.list_events(db)
+def list_events(
+    db: Session = Depends(get_db),
+    current_user_id: int | None = Depends(get_optional_current_user_id),
+) -> list[EventResponse]:
+    return activities_service.list_events(db, current_user_id)
 
 
 @router.get("/events/mine", response_model=list[EventResponse])
@@ -78,10 +81,14 @@ def create_event(
 
 
 @router.get("/events/{event_id}/announcements", response_model=list[AnnouncementResponse])
-def list_event_announcements(event_id: int, db: Session = Depends(get_db)) -> list[AnnouncementResponse]:
+def list_event_announcements(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+) -> list[AnnouncementResponse]:
     try:
-        return activities_service.list_event_announcements(db, event_id)
-    except ValueError as exc:
+        return activities_service.list_event_announcements(db, event_id, current_user_id)
+    except (ValueError, PermissionError) as exc:
         _raise_http(exc)
 
 
@@ -98,6 +105,30 @@ def create_event_announcement(
         _raise_http(exc)
 
 
+@router.post("/events/{event_id}/participate", response_model=EventResponse)
+def participate_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+) -> EventResponse:
+    try:
+        return activities_service.participate_event(db, event_id=event_id, user_id=current_user_id)
+    except (ValueError, PermissionError) as exc:
+        _raise_http(exc, value_error_status=400)
+
+
+@router.post("/events/{event_id}/leave", response_model=EventResponse)
+def leave_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+) -> EventResponse:
+    try:
+        return activities_service.leave_event(db, event_id=event_id, user_id=current_user_id)
+    except (ValueError, PermissionError) as exc:
+        _raise_http(exc)
+
+
 @router.post("/events/{event_id}/cancel", response_model=EventResponse)
 def cancel_event(
     event_id: int,
@@ -106,6 +137,18 @@ def cancel_event(
 ) -> EventResponse:
     try:
         return activities_service.cancel_event(db, event_id=event_id, user_id=current_user_id)
+    except (ValueError, PermissionError) as exc:
+        _raise_http(exc)
+
+
+@router.post("/events/{event_id}/delete", response_model=EventResponse)
+def delete_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+) -> EventResponse:
+    try:
+        return activities_service.delete_event(db, event_id=event_id, user_id=current_user_id)
     except (ValueError, PermissionError) as exc:
         _raise_http(exc)
 
@@ -187,6 +230,18 @@ def leave_club(
     try:
         return activities_service.leave_club(db, club_id=club_id, user_id=current_user_id)
     except ValueError as exc:
+        _raise_http(exc)
+
+
+@router.post("/clubs/{club_id}/delete", response_model=ClubResponse)
+def delete_club(
+    club_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+) -> ClubResponse:
+    try:
+        return activities_service.delete_club(db, club_id=club_id, user_id=current_user_id)
+    except (ValueError, PermissionError) as exc:
         _raise_http(exc)
 
 
