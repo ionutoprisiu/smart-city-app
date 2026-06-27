@@ -3,7 +3,6 @@ from __future__ import annotations
 from app.common.distance import (
     calculate_distance_matrix,
     calculate_route_cost,
-    calculate_route_distance,
     haversine_distance,
 )
 
@@ -32,8 +31,8 @@ def test_distance_matrix_is_symmetric_and_zero_diagonal() -> None:
             assert abs(matrix[i][j] - matrix[j][i]) < 1e-9
 
 
-def test_route_distance_and_cost_sum_edges() -> None:
+def test_route_cost_sums_edges() -> None:
     matrix = [[0.0, 1.0, 2.0], [1.0, 0.0, 3.0], [2.0, 3.0, 0.0]]
-    assert calculate_route_distance([0, 1, 2], matrix) == 1.0 + 3.0
+    assert calculate_route_cost([0, 1, 2], matrix) == 1.0 + 3.0
     assert calculate_route_cost([0, 2, 1], matrix) == 2.0 + 3.0
-    assert calculate_route_distance([0], matrix) == 0.0
+    assert calculate_route_cost([0], matrix) == 0.0

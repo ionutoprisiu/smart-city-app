@@ -9,8 +9,6 @@ from fastapi.testclient import TestClient
 def _body_start_and_one_attraction() -> dict[str, Any]:
     return {
         "attractions": [{"id": 101, "latitude": 46.78, "longitude": 23.60}],
-        "startLatitude": 46.77,
-        "startLongitude": 23.59,
         "useOsrm": True,
         "routingProfile": "driving",
     }
@@ -66,8 +64,6 @@ def test_optimize_haversine_no_osrm_three_points(client: TestClient) -> None:
             {"id": 1, "latitude": 46.77, "longitude": 23.59},
             {"id": 2, "latitude": 46.78, "longitude": 23.60},
         ],
-        "startLatitude": 46.76,
-        "startLongitude": 23.58,
         "useOsrm": False,
         "routingProfile": "foot",
     }
@@ -129,8 +125,6 @@ def test_optimize_use_osrm_true_but_table_fails_falls_back_to_haversine(
             {"id": 1, "latitude": 46.77, "longitude": 23.59},
             {"id": 2, "latitude": 46.78, "longitude": 23.60},
         ],
-        "startLatitude": 46.76,
-        "startLongitude": 23.58,
         "useOsrm": True,
         "routingProfile": "driving",
     }
@@ -229,8 +223,6 @@ def test_optimize_three_points_stub_aco_order_and_osrm_segments(
             {"id": 1, "latitude": 46.77, "longitude": 23.59},
             {"id": 2, "latitude": 46.79, "longitude": 23.61},
         ],
-        "startLatitude": 46.76,
-        "startLongitude": 23.58,
         "useOsrm": True,
         "routingProfile": "driving",
     }
@@ -242,9 +234,11 @@ def test_optimize_three_points_stub_aco_order_and_osrm_segments(
     assert data["totalDistance"] == pytest.approx(11.0)
 
 
-def test_optimize_value_error_returns_400(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_optimize_validation_error_returns_400(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.common.exceptions import ValidationAppError
+
     async def bad_value(_request: Any) -> Any:
-        raise ValueError("simulated business validation")
+        raise ValidationAppError("simulated business validation")
 
     monkeypatch.setattr("app.services.route_service.optimize", bad_value)
     r = client.post("/optimize", json=_body_start_and_one_attraction())
@@ -252,11 +246,14 @@ def test_optimize_value_error_returns_400(client: TestClient, monkeypatch: pytes
     assert "simulated business validation" in r.json().get("detail", "")
 
 
-def test_optimize_internal_error_returns_500(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_optimize_internal_error_returns_500(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.main import app
+
     async def boom(_request: Any) -> Any:
         raise RuntimeError("simulated internal failure")
 
     monkeypatch.setattr("app.services.route_service.optimize", boom)
-    r = client.post("/optimize", json=_body_start_and_one_attraction())
+    # Unexpected errors surface as a clean 500 without leaking the message.
+    local_client = TestClient(app, raise_server_exceptions=False)
+    r = local_client.post("/optimize", json=_body_start_and_one_attraction())
     assert r.status_code == 500
-    assert "simulated internal failure" in r.json().get("detail", "")

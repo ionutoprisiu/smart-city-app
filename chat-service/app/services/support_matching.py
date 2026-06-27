@@ -205,6 +205,17 @@ def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat()
 
 
+def _loads_json_lenient(text: str) -> dict:
+    """Parse model JSON output, tolerating ```json fences and stray whitespace."""
+    raw = (text or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+    if not raw:
+        raise ValueError("empty LLM response")
+    return json.loads(raw)
+
+
 def _llm_match(message: str, candidates: list[SupportQaCandidate]) -> SupportMatchResponse:
     if not candidates:
         return SupportMatchResponse(matchedQuestionId=None, confidence=0.0, reason="No history in this context")
@@ -239,9 +250,10 @@ def _llm_match(message: str, candidates: list[SupportQaCandidate]) -> SupportMat
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0,
         max_tokens=180,
+        response_format={"type": "json_object"},
     )
     text = (completion.choices[0].message.content or "").strip()
-    data = json.loads(text)
+    data = _loads_json_lenient(text)
     matched = data.get("matchedQuestionId")
     confidence = float(data.get("confidence") or 0.0)
     reason = str(data.get("reason") or "")

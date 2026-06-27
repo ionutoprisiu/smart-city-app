@@ -70,7 +70,7 @@ async def submit_verification(
     id_card_url, selfie_url = verification_storage.document_urls(user_id)
 
     user.verification_score = float(score) if score is not None else None
-    user.id_document_ocr_json = json.dumps(metadata) if isinstance(metadata, dict) else None
+    user.verification_metadata_json = json.dumps(metadata) if isinstance(metadata, dict) else None
     user.id_card_image_url = id_card_url
     user.face_image_url = selfie_url
     _apply_verification_outcome(user, status, reason=reason)
@@ -99,7 +99,7 @@ def get_verification_status(db: Session, user_id: int) -> VerificationStatusResp
         isVerified=user.is_verified,
         score=user.verification_score,
         reason=user.verification_reason,
-        metadata=_parse_metadata_json(user.id_document_ocr_json),
+        metadata=_parse_metadata_json(user.verification_metadata_json),
         canSubmit=can_submit,
         submitBlockedReason=blocked_reason,
         canAccessOrganizerFlow=can_access_flow,

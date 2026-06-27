@@ -32,13 +32,8 @@ def calculate_distance_matrix(points: list[dict]) -> list[list[float]]:
     return matrix
 
 
-def calculate_route_distance(route: list[int], distance_matrix: list[list[float]]) -> float:
-    if len(route) < 2:
-        return 0.0
-    return sum(distance_matrix[route[i]][route[i + 1]] for i in range(len(route) - 1))
-
-
 def calculate_route_cost(route: list[int], cost_matrix: list[list[float]]) -> float:
+    """Sum the matrix edges along a route. Works for any cost (km or seconds)."""
     if len(route) < 2:
         return 0.0
     return sum(cost_matrix[route[i]][route[i + 1]] for i in range(len(route) - 1))

@@ -5,9 +5,6 @@ class OptimizeRouteBody(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     attractionIds: list[int]
-    startLatitude: float | None = None
-    startLongitude: float | None = None
-    startName: str | None = None
     routingProfile: str = "driving"
 
     @field_validator("routingProfile", mode="before")

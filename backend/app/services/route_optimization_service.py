@@ -6,15 +6,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.common.exceptions import (
+    BadGatewayError,
+    ServiceUnavailableError,
+    ValidationAppError,
+)
 from app.integrations.aco_client import AcoServiceError, optimize as aco_optimize
 from app.models.tourist_attraction import TouristAttraction
-
-from app.core.route_start import (
-    ROUTE_START_LATITUDE,
-    ROUTE_START_LONGITUDE,
-    ROUTE_START_NAME,
-    start_label_for,
-)
 
 log = logging.getLogger(__name__)
 
@@ -22,30 +20,23 @@ log = logging.getLogger(__name__)
 def optimize_route(
     db: Session,
     attraction_ids: list[int],
-    start_lat: float | None,
-    start_lon: float | None,
     routing_profile: str,
-    start_name: str | None = None,
 ) -> dict[str, Any]:
     if not attraction_ids:
-        raise ValueError("At least 1 attraction required")
-
-    start_lat = ROUTE_START_LATITUDE
-    start_lon = ROUTE_START_LONGITUDE
-    start_name = ROUTE_START_NAME
+        raise ValidationAppError("At least 1 attraction required")
 
     profile = _normalize_routing_profile(routing_profile)
     attractions = _find_attractions_ordered(db, attraction_ids)
-    body = _build_aco_body(attractions, start_lat, start_lon, profile, start_name)
+    body = _build_aco_body(attractions, profile)
 
     log.info("Calling ACO optimize with routingProfile=%s", profile)
     try:
         raw = aco_optimize(body)
     except AcoServiceError as exc:
-        raise RuntimeError(str(exc)) from exc
+        raise ServiceUnavailableError(str(exc)) from exc
 
     response = _parse_aco_response(raw)
-    _enrich_step_names(response, attractions, start_lat, start_lon, start_name)
+    _enrich_step_names(response, attractions)
     log.info("Route optimized: %s km, %s min", response.get("totalDistance"), response.get("totalTime"))
     return response
 
@@ -55,7 +46,7 @@ def _normalize_routing_profile(routing_profile: str | None) -> str:
         return "driving"
     profile = str(routing_profile).strip().lower()
     if profile not in ("driving", "foot"):
-        raise ValueError("routingProfile must be 'driving' or 'foot'")
+        raise ValidationAppError("routingProfile must be 'driving' or 'foot'")
     return profile
 
 
@@ -73,19 +64,18 @@ def _find_attractions_ordered(db: Session, ids: list[int]) -> list[TouristAttrac
     if len(rows) != len(ids):
         found = {a.id for a in rows}
         missing = [i for i in ids if i not in found]
-        raise ValueError(f"Attractions not found: {missing}")
+        raise ValidationAppError(f"Attractions not found: {missing}")
     by_id = {a.id: a for a in rows}
     return [by_id[i] for i in ids]
 
 
 def _build_aco_body(
     attractions: list[TouristAttraction],
-    start_lat: float | None,
-    start_lon: float | None,
     routing_profile: str,
-    start_name: str | None = None,
 ) -> dict[str, Any]:
-    body: dict[str, Any] = {
+    # Only attractions + profile are sent; aco-service injects the fixed UTCN
+    # start anchor itself (single source of truth for the start point).
+    return {
         "attractions": [
             {
                 "id": a.id,
@@ -97,20 +87,13 @@ def _build_aco_body(
         "routingProfile": routing_profile,
         "useOsrm": True,
     }
-    if start_lat is not None:
-        body["startLatitude"] = start_lat
-    if start_lon is not None:
-        body["startLongitude"] = start_lon
-    if start_name and start_name.strip():
-        body["startName"] = start_name.strip()
-    return body
 
 
 def _parse_aco_response(body: dict[str, Any]) -> dict[str, Any]:
     steps_data = body.get("steps")
     path = body.get("path")
     if steps_data is None or path is None:
-        raise RuntimeError("Invalid ACO response")
+        raise BadGatewayError("Invalid ACO response")
 
     steps: list[dict[str, Any]] = []
     for s in steps_data:
@@ -153,14 +136,11 @@ def _parse_aco_response(body: dict[str, Any]) -> dict[str, Any]:
 def _enrich_step_names(
     response: dict[str, Any],
     attractions: list[TouristAttraction],
-    start_lat: float,
-    start_lon: float,
-    start_name: str | None,
 ) -> None:
+    # The start step (id 0) keeps the name aco-service assigned; only attraction
+    # steps need their real catalog names filled in (aco only knows ids).
     name_map = {a.id: a.name for a in attractions}
     for step in response["steps"]:
         attraction_id = int(step["attractionId"])
-        if attraction_id == 0:
-            step["attractionName"] = start_label_for(start_lat, start_lon, start_name)
-        else:
+        if attraction_id != 0:
             step["attractionName"] = name_map.get(attraction_id, "Unknown")

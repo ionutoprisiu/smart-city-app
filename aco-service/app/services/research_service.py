@@ -98,14 +98,6 @@ def list_sets() -> list[dict[str, Any]]:
     return sets
 
 
-def default_aco_params() -> dict[str, float | int]:
-    return dict(DEFAULT_ACO_PARAMS)
-
-
-def default_pso_params() -> dict[str, float | int]:
-    return dict(DEFAULT_PSO_PARAMS)
-
-
 def _resolve_set(set_name: str) -> dict[str, Any]:
     dataset = _load_dataset()
     for set_def in dataset["sets"]:

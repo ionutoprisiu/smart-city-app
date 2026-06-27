@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator, model_validator
-
-from app.core.route_start import ROUTE_START_LATITUDE, ROUTE_START_LONGITUDE
+from pydantic import BaseModel, Field, field_validator
 
 MAX_ATTRACTIONS = 50
 
@@ -14,10 +12,9 @@ class AttractionRequest(BaseModel):
 
 
 class OptimizeRequest(BaseModel):
+    # The start point is a fixed anchor (UTCN) injected by the service, not the
+    # client — see route_service / route_start. Only attractions are supplied.
     attractions: list[AttractionRequest] = Field(..., min_length=1, max_length=MAX_ATTRACTIONS)
-    startLatitude: float | None = Field(default=None, ge=-90, le=90)
-    startLongitude: float | None = Field(default=None, ge=-180, le=180)
-    startName: str | None = Field(default=None, max_length=200)
     useOsrm: bool = Field(default=True)
     routingProfile: str = Field(default="driving")
 
@@ -28,14 +25,6 @@ class OptimizeRequest(BaseModel):
         if p not in ("driving", "foot"):
             raise ValueError("routingProfile must be 'driving' or 'foot'")
         return p
-
-    @model_validator(mode="after")
-    def validate_minimum_points(self) -> OptimizeRequest:
-        self.startLatitude = ROUTE_START_LATITUDE
-        self.startLongitude = ROUTE_START_LONGITUDE
-        if len(self.attractions) < 1:
-            raise ValueError("At least 1 attraction required")
-        return self
 
 
 class RouteStepResponse(BaseModel):

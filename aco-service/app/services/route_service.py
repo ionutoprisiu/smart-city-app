@@ -6,10 +6,14 @@ from app.algorithms.aco import ACOOptimizer
 from app.common.distance import (
     MISSING_EDGE_SEC,
     calculate_distance_matrix,
-    calculate_route_distance,
+    calculate_route_cost,
 )
 from app.core.config import settings
-from app.core.route_start import start_label_for
+from app.core.route_start import (
+    ROUTE_START_LATITUDE,
+    ROUTE_START_LONGITUDE,
+    ROUTE_START_NAME,
+)
 from app.integrations import osrm_client
 from app.schemas.route import OptimizeRequest, OptimizeResponse, RouteStepResponse
 
@@ -17,20 +21,19 @@ log = logging.getLogger(__name__)
 
 
 async def optimize(request: OptimizeRequest) -> OptimizeResponse:
-    has_start = True
     profile = osrm_client.normalize_profile(request.routingProfile)
     attractions = _attractions_to_points(request)
 
     log.info(
-        "Optimizing route: %d attractions, start=%s, OSRM=%s, profile=%s",
-        len(attractions), has_start, request.useOsrm, profile,
+        "Optimizing route: %d attractions, OSRM=%s, profile=%s",
+        len(attractions), request.useOsrm, profile,
     )
 
-    points = _build_points(request, attractions, has_start)
+    points = _build_points(attractions)
     distance_matrix, duration_matrix, used_osrm = await _build_matrices(points, profile, request.useOsrm)
 
     best_route = _build_route(points, distance_matrix, duration_matrix, used_osrm)
-    best_distance_km = calculate_route_distance(best_route, distance_matrix)
+    best_distance_km = calculate_route_cost(best_route, distance_matrix)
     route_geometry, route_segments, leg_durations_sec = await _route_details(points, best_route, profile, used_osrm)
 
     response = _build_response(
@@ -44,7 +47,6 @@ async def optimize(request: OptimizeRequest) -> OptimizeResponse:
         profile,
         duration_matrix,
         leg_durations_sec,
-        request.startName,
     )
     log.info(
         "Route optimized: %.3f km, travel=%dm profile=%s OSRM=%s",
@@ -60,16 +62,10 @@ def _attractions_to_points(request: OptimizeRequest) -> list[dict]:
     ]
 
 
-def _build_points(request: OptimizeRequest, attractions: list[dict], has_start: bool) -> list[dict]:
-    points: list[dict] = []
-    if has_start:
-        points.append({
-            "id": 0,
-            "latitude": request.startLatitude,
-            "longitude": request.startLongitude,
-        })
-    points.extend(attractions)
-    return points
+def _build_points(attractions: list[dict]) -> list[dict]:
+    # Index 0 is the fixed start anchor (UTCN); selected attractions follow.
+    start = {"id": 0, "latitude": ROUTE_START_LATITUDE, "longitude": ROUTE_START_LONGITUDE}
+    return [start, *attractions]
 
 
 async def _build_matrices(
@@ -126,7 +122,6 @@ def _build_response(
     profile: str,
     duration_matrix: list[list[float]] | None,
     leg_durations_sec: list[float],
-    start_name: str | None,
 ) -> OptimizeResponse:
     steps: list[RouteStepResponse] = []
     path: list[dict] = []
@@ -144,9 +139,7 @@ def _build_response(
             order=i + 1,
             attractionId=point["id"],
             attractionName=(
-                start_label_for(point["latitude"], point["longitude"], start_name)
-                if is_start
-                else f"Attraction {point['id']}"
+                ROUTE_START_NAME if is_start else f"Attraction {point['id']}"
             ),
             latitude=point["latitude"],
             longitude=point["longitude"],

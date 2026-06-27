@@ -23,7 +23,6 @@ def _seed_user(db: Session, *, status: VerificationStatus, role: Role = Role.USE
         password=hash_password("secret"),
         first_name="Test",
         last_name="User",
-        name="Test User",
         role=role.value,
         is_verified=status == VerificationStatus.APPROVED,
         is_approved=status == VerificationStatus.APPROVED,

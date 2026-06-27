@@ -15,11 +15,6 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "dev-only-change-me-use-openssl-rand-hex-32"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7
-    seed_demo_user: bool = False
-    demo_user_email: str = "demo@example.com"
-    demo_user_password: str = "demo1234"
-    demo_user_first_name: str = "Demo"
-    demo_user_last_name: str = "User"
     sync_attractions_on_startup: bool = True
     seed_admin_user: bool = True
     admin_user_email: str = "admin@admin.com"

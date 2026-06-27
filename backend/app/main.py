@@ -16,7 +16,6 @@ from app.db.schema_updates import apply_non_destructive_updates
 from app.db.seed import (
     seed_admin_user_if_enabled,
     seed_core_attractions_if_empty,
-    seed_demo_user_if_enabled,
 )
 from app.db.session import SessionLocal
 from app.services import visit_city_service
@@ -33,7 +32,6 @@ async def lifespan(_app: FastAPI):
     db = SessionLocal()
     try:
         seed_admin_user_if_enabled(db)
-        seed_demo_user_if_enabled(db)
         seed_core_attractions_if_empty(db)
         if settings.sync_attractions_on_startup:
             try:

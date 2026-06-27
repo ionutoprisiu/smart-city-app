@@ -7,7 +7,17 @@ def apply_non_destructive_updates(engine: Engine) -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_status VARCHAR(32) DEFAULT 'NOT_SUBMITTED' NOT NULL",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_score DOUBLE PRECISION",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_reason VARCHAR(255)",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS id_document_ocr_json VARCHAR(4000)",
+        # rename legacy column to reflect its content (verification metadata, not OCR)
+        (
+            "DO $$ BEGIN "
+            "IF EXISTS (SELECT 1 FROM information_schema.columns "
+            "WHERE table_name='users' AND column_name='id_document_ocr_json') THEN "
+            "ALTER TABLE users RENAME COLUMN id_document_ocr_json TO verification_metadata_json; "
+            "END IF; END $$"
+        ),
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_metadata_json VARCHAR(4000)",
+        # drop redundant denormalized full name (derivable from first_name + last_name)
+        "ALTER TABLE users DROP COLUMN IF EXISTS name",
         # role check: add ORGANIZER
         "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
         (

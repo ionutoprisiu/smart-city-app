@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.models.enums import AttractionCategory
 from app.models.tourist_attraction import TouristAttraction
 from app.services import attraction_discovery_service
-from app.services.route_optimization_service import optimize_route
 
 CLUJ_CENTER_LAT = 46.7712
 CLUJ_CENTER_LON = 23.5898
@@ -67,50 +66,35 @@ def get_live_attractions(db: Session, q: str | None, limit: int | None) -> list[
     capped = max(1, min(limit or 300, 500))
     query = (q or "").strip().lower()
 
-    discovered = attraction_discovery_service.discover_attractions(CLUJ_CENTER_LAT, CLUJ_CENTER_LON, CLUJ_RADIUS_KM)
-    seen_names = {
-        (a.name or "").strip().lower()
-        for a in discovered
-        if a.name and str(a.name).strip()
-    }
+    # 1. Discover live POIs from OSM and persist the ones matching the query.
+    discovered = attraction_discovery_service.discover_attractions(
+        CLUJ_CENTER_LAT, CLUJ_CENTER_LON, CLUJ_RADIUS_KM
+    )
+    named = [a for a in discovered if _name_key(a)]
+    upserted = _batch_upsert(db, [a for a in named if _matches_query(a, query)])
 
-    normalized = [
-        a
-        for a in discovered
-        if a.name and str(a.name).strip()
-        and (
-            not query
-            or query in (a.name or "").lower()
-            or (a.description and query in (a.description or "").lower())
-        )
-    ]
-
-    upserted = _batch_upsert(db, normalized)
-
-    if not query:
-        db_matches = db.execute(_select_all_active_ordered()).scalars().all()
-    else:
-        db_matches = db.execute(_select_active_by_text(query)).scalars().all()
+    # 2. Add stored attractions the live pass did not already cover (by name).
+    live_names = {_name_key(a) for a in named}
+    stored_query = _select_all_active_ordered() if not query else _select_active_by_text(query)
+    stored = db.execute(stored_query).scalars().all()
 
     merged: dict[int, TouristAttraction] = {a.id: a for a in upserted}
-    for a in db_matches:
-        n = (a.name or "").strip().lower()
-        if n and n not in seen_names:
+    for a in stored:
+        if _name_key(a) not in live_names:
             merged[a.id] = a
 
-    sorted_list = sorted(merged.values(), key=lambda x: (x.name or "").lower())[:capped]
-    return [_map_to_dict(a) for a in sorted_list]
+    ordered = sorted(merged.values(), key=lambda a: (a.name or "").lower())[:capped]
+    return [_map_to_dict(a) for a in ordered]
 
 
-def optimize_route_api(
-    db: Session,
-    attraction_ids: list[int],
-    start_lat: float | None,
-    start_lon: float | None,
-    routing_profile: str,
-    start_name: str | None = None,
-) -> dict[str, Any]:
-    return optimize_route(db, attraction_ids, start_lat, start_lon, routing_profile, start_name)
+def _name_key(a: TouristAttraction) -> str:
+    return (a.name or "").strip().lower()
+
+
+def _matches_query(a: TouristAttraction, query: str) -> bool:
+    if not query:
+        return True
+    return query in (a.name or "").lower() or query in (a.description or "").lower()
 
 
 def _select_all_active_ordered():

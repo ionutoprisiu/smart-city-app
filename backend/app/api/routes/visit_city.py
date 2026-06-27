@@ -1,18 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.schemas.visit_city import OptimizeRouteBody
 from app.services import visit_city_service
+from app.services.route_optimization_service import optimize_route
 
 router = APIRouter(prefix="/visit-city", tags=["visit-city"])
-
-
-def _runtime_status_code(exc: RuntimeError) -> int:
-    msg = str(exc)
-    if "ACO" in msg or "not available" in msg:
-        return 503
-    return 502
 
 
 @router.get("/attractions")
@@ -36,21 +30,6 @@ def get_live_attractions(
 
 
 @router.post("/optimize")
-def optimize_route(
-    body: OptimizeRouteBody,
-    db: Session = Depends(get_db),
-) -> dict:
-    try:
-        data = visit_city_service.optimize_route_api(
-            db,
-            body.attractionIds,
-            body.startLatitude,
-            body.startLongitude,
-            body.routingProfile,
-            body.startName,
-        )
-        return {"data": data}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=_runtime_status_code(exc), detail=str(exc)) from exc
+def optimize(body: OptimizeRouteBody, db: Session = Depends(get_db)) -> dict:
+    data = optimize_route(db, body.attractionIds, body.routingProfile)
+    return {"data": data}

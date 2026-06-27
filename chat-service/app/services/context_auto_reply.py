@@ -76,6 +76,8 @@ def _parse_context_json(text: str) -> ContextAnswerResponse:
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
+    if not raw:
+        raise ValueError("empty LLM response")
     data = json.loads(raw)
     can_answer = bool(data.get("canAnswer"))
     answer = str(data.get("answer") or "").strip()
@@ -358,6 +360,7 @@ def _llm_answer_from_context(message: str, context: str, qa_block: str) -> Conte
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
         max_tokens=220,
+        response_format={"type": "json_object"},
     )
     text = (completion.choices[0].message.content or "").strip()
     out = _parse_context_json(text)
