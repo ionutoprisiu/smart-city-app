@@ -1,9 +1,3 @@
-import lineOffset from '@turf/line-offset';
-import { lineString } from '@turf/helpers';
-import simplify from '@turf/simplify';
-
-export const CLUJ_NAPOCA_CENTER = { latitude: 46.7712, longitude: 23.5898 };
-
 export const ROUTE_START_POINT = {
   latitude: 46.7726428,
   longitude: 23.5852436,
@@ -57,46 +51,64 @@ export const dedupeCoords = (
   return out.length > 1 ? out : coords;
 };
 
-export const isRoadSnappedSegment = (coords: [number, number][]) => {
-  if (coords.length >= 8) {
-    return true;
-  }
-  if (coords.length < 3) {
-    return false;
-  }
-  let pathMeters = 0;
-  for (let i = 1; i < coords.length; i++) {
-    pathMeters += metersBetweenCoords(coords[i - 1], coords[i]);
-  }
-  const straightMeters = metersBetweenCoords(coords[0], coords[coords.length - 1]);
-  if (straightMeters < 8) {
-    return coords.length >= 4;
-  }
-  return pathMeters > straightMeters * 1.06;
+const bearingDeg = (from: [number, number], to: [number, number]) => {
+  const cosLat = Math.max(0.25, Math.cos((from[0] * Math.PI) / 180));
+  const dLat = to[0] - from[0];
+  const dLon = (to[1] - from[1]) * cosLat;
+  return (Math.atan2(dLon, dLat) * 180) / Math.PI;
 };
 
-export const offsetRouteSegment = (
+// Deviation from "straight ahead" between two consecutive headings:
+// 0° = no turn, 180° = full reversal (hairpin).
+const turnDeg = (a: [number, number], b: [number, number], c: [number, number]) => {
+  let diff = Math.abs(bearingDeg(a, b) - bearingDeg(b, c)) % 360;
+  if (diff > 180) diff = 360 - diff;
+  return diff;
+};
+
+// Cleans a single OSRM leg so screen-pixel polyline offsetting cannot produce
+// spiral "coils". Two artifacts cause them: (1) near-duplicate points, whose
+// perpendicular direction is unstable, and (2) short hairpin stubs where the
+// foot route does an out-and-back to snap a waypoint onto the road. Both are
+// removed; genuine road shape (longer turns) is preserved.
+export const sanitizeLeg = (
   coords: [number, number][],
-  offsetMeters: number,
+  { minMeters = 3, maxSpikeMeters = 18, spikeTurnDeg = 100 } = {},
 ): [number, number][] => {
-  if (coords.length < 2 || Math.abs(offsetMeters) < 0.25) {
+  if (coords.length < 3) {
     return coords;
   }
 
-  const cleaned = dedupeCoords(coords, 1.2);
-  if (cleaned.length < 2) {
-    return coords;
+  // 1) Merge near-duplicate points. Unlike dedupeCoords, never append a micro
+  //    segment at the end — snap the last kept point to the true endpoint.
+  const merged: [number, number][] = [coords[0]];
+  for (let i = 1; i < coords.length; i++) {
+    const prev = merged[merged.length - 1];
+    if (metersBetweenCoords(prev, coords[i]) >= minMeters) {
+      merged.push(coords[i]);
+    } else if (i === coords.length - 1) {
+      merged[merged.length - 1] = coords[i];
+    }
+  }
+  if (merged.length < 3) {
+    return merged;
   }
 
-  const geoLine = lineString(cleaned.map(([lat, lon]) => [lon, lat]));
-  const simplified = simplify(geoLine, { tolerance: 0.000004, highQuality: true });
-
-  try {
-    const shifted = lineOffset(simplified, offsetMeters / 1000, { units: 'kilometers' });
-    return shifted.geometry.coordinates.map(([lon, lat]) => [lat, lon] as [number, number]);
-  } catch {
-    return cleaned;
+  // 2) Drop short hairpin spikes (vertex where the path nearly reverses over a
+  //    tiny stub) — snapping jitter, not a real detour.
+  const out: [number, number][] = [merged[0]];
+  for (let i = 1; i < merged.length - 1; i++) {
+    const a = out[out.length - 1];
+    const b = merged[i];
+    const c = merged[i + 1];
+    const stub = Math.min(metersBetweenCoords(a, b), metersBetweenCoords(b, c));
+    if (turnDeg(a, b, c) >= spikeTurnDeg && stub <= maxSpikeMeters) {
+      continue;
+    }
+    out.push(b);
   }
+  out.push(merged[merged.length - 1]);
+  return out;
 };
 
 export const splitGeometryBySteps = (

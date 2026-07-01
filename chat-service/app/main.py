@@ -6,6 +6,7 @@ import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.errors import register_exception_handlers
 from app.api.routes.messages import router as messages_router
 from app.core.config import settings
 from app.socket.handlers import sio
@@ -23,6 +24,7 @@ fastapi_app.add_middleware(
     allow_headers=["*"],
 )
 
+register_exception_handlers(fastapi_app)
 fastapi_app.include_router(messages_router)
 
 

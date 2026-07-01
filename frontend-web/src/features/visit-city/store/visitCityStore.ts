@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { extractErrorMessage } from '@shared/api/errors';
 import { Logger } from '@shared/utils/logger';
-import { ROUTE_START_POINT } from '@shared/utils/geo';
 import { VisitCityApi } from '../api/visitCityApi';
 import {
   Attraction,
@@ -137,9 +136,6 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
     try {
       const result = await VisitCityApi.optimizeRoute({
         attractionIds: backendIds,
-        startLat: ROUTE_START_POINT.latitude,
-        startLon: ROUTE_START_POINT.longitude,
-        startName: ROUTE_START_POINT.name,
         routingProfile,
       });
       set({

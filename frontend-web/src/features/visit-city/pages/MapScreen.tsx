@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import 'leaflet-polylineoffset'; // patches L.Polyline to support a screen-pixel `offset` option
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { AppButton } from '@shared/components/AppButton';
@@ -11,7 +12,13 @@ import { RouteStartBar } from '../components/RouteStartBar';
 import { RouteStepsList } from '../components/RouteStepsList';
 import { SelectionDock } from '../components/SelectionDock';
 import { useVisitCityStore } from '../store/visitCityStore';
-import { ROUTE_START_POINT, dedupeCoords, distanceKmBetween, offsetRouteSegment, splitGeometryBySteps } from '@shared/utils/geo';
+import {
+  ROUTE_START_POINT,
+  dedupeCoords,
+  distanceKmBetween,
+  sanitizeLeg,
+  splitGeometryBySteps,
+} from '@shared/utils/geo';
 import { ROUTE_SEGMENT_COLORS } from '../constants/routeColors';
 import {
   Attraction,
@@ -62,24 +69,26 @@ type RoutePolylineLayer = {
   weight: number;
   opacity: number;
   kind: 'casing' | 'segment';
+  offsetPixels: number;
 };
 
 const toCoords = (points: { latitude: number; longitude: number }[]) =>
   points.map((p) => [p.latitude, p.longitude] as [number, number]);
 
-// Perpendicular separation between two parallel lanes. A few pixels at the
-// current zoom, tightly clamped so a lane can never wander off the roadway.
-const laneSpacingMeters = (region: Region) => {
-  const metersPerPixel = (region.latitudeDelta * 111_320) / 720;
-  return Math.max(3.5, Math.min(7, metersPerPixel * 3));
-};
-
+// Lanes share one street are fanned apart by this many screen pixels per lane.
+// Kept small: a wider offset self-intersects into visible loops at sharp turns.
+const LANE_PIXELS = 3;
 const LANE_KEY_DECIMALS = 5;
-const MAX_LANE_OFFSET_METERS = 8;
+// Two legs are fanned into separate lanes only if they share at least this many
+// road edges. A single incidental shared edge (legs merely touching at a
+// roundabout or a waypoint) must not trigger an offset, otherwise the pixel
+// offset self-intersects into a small loop on tight curves at low zoom.
+const MIN_SHARED_EDGES = 2;
 
-// Assigns each leg a lane number. Legs that share road geometry with other legs
+// Assigns each leg a lane index. Legs that share road geometry with other legs
 // are fanned out into distinct, symmetric lanes (…-1, 0, +1…); a leg that runs
-// on a unique road keeps lane 0 and is drawn straight on the street.
+// on a unique road keeps lane 0. The separation is applied as a screen-pixel
+// offset at render time (robust, artifact-free, constant at every zoom).
 const assignLaneOffsets = (segments: [number, number][][]): number[] => {
   const pointKey = (p: [number, number]) =>
     `${p[0].toFixed(LANE_KEY_DECIMALS)},${p[1].toFixed(LANE_KEY_DECIMALS)}`;
@@ -100,17 +109,27 @@ const assignLaneOffsets = (segments: [number, number][][]): number[] => {
     }
   });
 
-  // Link any two legs that share at least one edge.
-  const neighbours: Set<number>[] = segments.map(() => new Set<number>());
+  // Count how many edges each pair of legs shares.
+  const sharedEdges = new Map<string, number>();
   edgeToLegs.forEach((legs) => {
     if (legs.size < 2) return;
-    const list = [...legs];
+    const list = [...legs].sort((a, b) => a - b);
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
-        neighbours[list[i]].add(list[j]);
-        neighbours[list[j]].add(list[i]);
+        const key = `${list[i]}|${list[j]}`;
+        sharedEdges.set(key, (sharedEdges.get(key) ?? 0) + 1);
       }
     }
+  });
+
+  // Link two legs only when they share a substantial run of road, not a single
+  // incidental edge (which would offset a leg into a loop on tight curves).
+  const neighbours: Set<number>[] = segments.map(() => new Set<number>());
+  sharedEdges.forEach((count, key) => {
+    if (count < MIN_SHARED_EDGES) return;
+    const [a, b] = key.split('|').map(Number);
+    neighbours[a].add(b);
+    neighbours[b].add(a);
   });
 
   // Fan out each connected group of overlapping legs around the shared street.
@@ -140,7 +159,7 @@ const assignLaneOffsets = (segments: [number, number][][]): number[] => {
   return lanes;
 };
 
-const buildRoutePolylines = (result: RouteResult | null, region: Region): RoutePolylineLayer[] => {
+const buildRoutePolylines = (result: RouteResult | null): RoutePolylineLayer[] => {
   if (result == null) {
     return [];
   }
@@ -158,7 +177,7 @@ const buildRoutePolylines = (result: RouteResult | null, region: Region): RouteP
   // per consecutive waypoint pair). Prefer those. Only re-split the merged
   // geometry ourselves when they are missing or degenerate.
   const fromApi = result.routeSegments
-    .map((seg) => dedupeCoords(toCoords(seg)))
+    .map((seg) => sanitizeLeg(toCoords(seg)))
     .filter((coords) => coords.length > 1);
 
   let segmentCoords: [number, number][][];
@@ -166,7 +185,7 @@ const buildRoutePolylines = (result: RouteResult | null, region: Region): RouteP
     segmentCoords = fromApi;
   } else if (expectedLegs > 0) {
     segmentCoords = splitGeometryBySteps(result.routeGeometry, result.steps)
-      .map((coords) => dedupeCoords(coords))
+      .map((coords) => sanitizeLeg(coords))
       .filter((coords) => coords.length > 1);
   } else {
     segmentCoords = [];
@@ -181,43 +200,37 @@ const buildRoutePolylines = (result: RouteResult | null, region: Region): RouteP
         weight: 6,
         opacity: 1,
         kind: 'segment',
+        offsetPixels: 0,
       },
     ];
   }
 
-  // Separate only the legs that actually share a street, so overlapping
-  // tronsons never hide each other while unique legs stay on the road.
+  // Each leg is drawn on its real OSRM road geometry. Legs that share a street
+  // are separated by a screen-pixel offset (see assignLaneOffsets) so they never
+  // hide each other. All white casings go underneath every colored segment.
   const lanes = assignLaneOffsets(segmentCoords);
-  const spacing = laneSpacingMeters(region);
-
-  // All white casings go underneath every colored segment, so where two legs
-  // share a street the casing never paints over a neighbouring leg's color.
   const casingLayers: RoutePolylineLayer[] = [];
   const segmentLayers: RoutePolylineLayer[] = [];
 
   segmentCoords.forEach((coords, i) => {
-    const offsetMeters = Math.max(
-      -MAX_LANE_OFFSET_METERS,
-      Math.min(MAX_LANE_OFFSET_METERS, lanes[i] * spacing),
-    );
-    const drawn =
-      Math.abs(offsetMeters) > 0.25 ? offsetRouteSegment(coords, offsetMeters) : coords;
-
+    const offsetPixels = lanes[i] * LANE_PIXELS;
     casingLayers.push({
       id: `seg-casing-${i}`,
-      coords: drawn,
+      coords,
       color: '#ffffff',
       weight: 7,
       opacity: 1,
       kind: 'casing',
+      offsetPixels,
     });
     segmentLayers.push({
       id: `seg-${i}`,
-      coords: drawn,
+      coords,
       color: ROUTE_SEGMENT_COLORS[i % ROUTE_SEGMENT_COLORS.length],
       weight: 4,
       opacity: 1,
       kind: 'segment',
+      offsetPixels,
     });
   });
 
@@ -572,8 +585,8 @@ export const MapScreen: React.FC = () => {
   const footOnMap = mapRoutingProfile === 'foot';
 
   const polylines = useMemo(
-    () => buildRoutePolylines(routeResult, mapRegion),
-    [routeResult, mapRegion],
+    () => buildRoutePolylines(routeResult),
+    [routeResult],
   );
 
   const orderMap = useMemo(() => {
@@ -684,19 +697,19 @@ export const MapScreen: React.FC = () => {
         <MapEvents onRegionChange={setMapRegion} onLongPress={addCustomPin} />
         <TileLayer url={TILE_URL} maxZoom={19} />
 
-        {polylines.map((line) => (
-          <Polyline
-            key={line.id}
-            positions={line.coords}
-            pathOptions={{
-              color: line.color,
-              weight: polylineStrokeWidth(line, mapRoutingProfile),
-              opacity: line.opacity,
-              lineCap: 'round',
-              lineJoin: 'round',
-            }}
-          />
-        ))}
+        {polylines.map((line) => {
+          const pathOptions: L.PathOptions & { offset: number } = {
+            color: line.color,
+            weight: polylineStrokeWidth(line, mapRoutingProfile),
+            opacity: line.opacity,
+            lineCap: 'round',
+            lineJoin: 'round',
+            offset: line.offsetPixels,
+          };
+          return (
+            <Polyline key={`${line.id}:${line.offsetPixels}`} positions={line.coords} pathOptions={pathOptions} />
+          );
+        })}
 
         {displayMarkers.map((marker) => {
           if (marker.kind === 'cluster') {

@@ -17,7 +17,16 @@ type Options = {
   scope?: 'support' | 'group';
   onMessage: (message: ActivityChatMessage) => void;
   onMessageDeleted?: (payload: { messageId: number; inReplyToMessageId: number | null }) => void;
+  onAutoReplyStatus?: (payload: AutoReplyStatusPayload) => void;
   onSocketError?: (message: string) => void;
+};
+
+export type AutoReplyStatus = 'pending' | 'answered' | 'none';
+
+export type AutoReplyStatusPayload = {
+  questionId: number;
+  threadUserId: number | null;
+  status: AutoReplyStatus;
 };
 
 type SendArgs = {
@@ -41,6 +50,7 @@ export const useActivityChatSocket = ({
   scope = 'support',
   onMessage,
   onMessageDeleted,
+  onAutoReplyStatus,
   onSocketError,
 }: Options) => {
   const socketRef = useRef<Socket | null>(null);
@@ -48,6 +58,8 @@ export const useActivityChatSocket = ({
   onMessageRef.current = onMessage;
   const onMessageDeletedRef = useRef(onMessageDeleted);
   onMessageDeletedRef.current = onMessageDeleted;
+  const onAutoReplyStatusRef = useRef(onAutoReplyStatus);
+  onAutoReplyStatusRef.current = onAutoReplyStatus;
   const onSocketErrorRef = useRef(onSocketError);
   onSocketErrorRef.current = onSocketError;
 
@@ -111,9 +123,20 @@ export const useActivityChatSocket = ({
       }
     };
 
+    const handleAutoReplyStatus = (payload: unknown) => {
+      const data = payload as Partial<AutoReplyStatusPayload> | null;
+      if (data == null || typeof data.questionId !== 'number' || data.status == null) return;
+      onAutoReplyStatusRef.current?.({
+        questionId: data.questionId,
+        threadUserId: data.threadUserId ?? null,
+        status: data.status,
+      });
+    };
+
     socket.on('connect', joinRoom);
     socket.on('chat:message', handleIncoming);
     socket.on('chat:message_deleted', handleDeleted);
+    socket.on('chat:autoreply', handleAutoReplyStatus);
     socket.on('disconnect', () => {
       if (enabled) setConnectionStatus('connecting');
     });
@@ -127,6 +150,7 @@ export const useActivityChatSocket = ({
       socket.off('connect', joinRoom);
       socket.off('chat:message', handleIncoming);
       socket.off('chat:message_deleted', handleDeleted);
+      socket.off('chat:autoreply', handleAutoReplyStatus);
       socket.disconnect();
       socketRef.current = null;
       setConnectionStatus('idle');
@@ -230,5 +254,35 @@ export const useActivityChatSocket = ({
     [kind, resourceId],
   );
 
-  return { sendMessage, approveAutoReply, rejectAutoReply, connectionStatus, retryConnection };
+  const editAutoReply = useCallback(
+    (messageId: number, body: string): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const socket = socketRef.current;
+        if (!socket?.connected) {
+          reject(new Error('Chat is not connected. Wait a moment or tap Retry.'));
+          return;
+        }
+        socket.emit(
+          'chat_edit',
+          { kind, resourceId, messageId, body },
+          (res: AckResult) => {
+            if (res?.ok) {
+              resolve();
+              return;
+            }
+            reject(new Error(res?.error ?? 'Could not edit auto-reply'));
+          },
+        );
+      }),
+    [kind, resourceId],
+  );
+
+  return {
+    sendMessage,
+    approveAutoReply,
+    rejectAutoReply,
+    editAutoReply,
+    connectionStatus,
+    retryConnection,
+  };
 };

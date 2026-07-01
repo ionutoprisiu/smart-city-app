@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { extractErrorMessage } from '@shared/api/errors';
 import { Icon } from '@shared/components/Icon';
 import { Spinner } from '@shared/components/Spinner';
 import { ChatApi } from '../api/chatApi';
-import { useActivityChatSocket } from '../hooks/useActivityChatSocket';
+import { AutoReplyStatusPayload, useActivityChatSocket } from '../hooks/useActivityChatSocket';
 import { ActivityChatMessage, ActivityChatThread } from '../types';
 
 type Props = {
@@ -70,6 +70,12 @@ const hasPendingAutoReply = (items: ActivityChatMessage[], questionId: number) =
       !m.isApproved,
   );
 
+// Any organizer reply to a question — manual or auto, approved or not. Used to
+// hide the member's "awaiting" hint once an answer (incl. an unverified AI one)
+// has been delivered.
+const hasAnyOrganizerReply = (items: ActivityChatMessage[], questionId: number) =>
+  items.some((m) => m.role === 'ORGANIZER' && m.inReplyToMessageId === questionId);
+
 const threadNeedsAttention = (t: ActivityChatThread) => t.lastMessageRole === 'USER';
 
 const mergeMessages = (
@@ -88,6 +94,10 @@ const mergeMessages = (
 const bubbleRadius = (outgoing: boolean) =>
   outgoing ? '16px 16px 4px 16px' : '16px 16px 16px 4px';
 
+// Safety net: stop the "AI is thinking" spinner even if the final status event
+// is missed. Must exceed the worst-case auto-reply time (up to two 30s LLM calls).
+const AUTO_REPLY_TIMEOUT_MS = 90_000;
+
 export const SupportChatSection: React.FC<Props> = ({
   variant = 'inline',
   kind,
@@ -105,6 +115,9 @@ export const SupportChatSection: React.FC<Props> = ({
   const [posting, setPosting] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingBody, setEditingBody] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
   const [threads, setThreads] = useState<ActivityChatThread[]>([]);
@@ -114,6 +127,8 @@ export const SupportChatSection: React.FC<Props> = ({
   const [items, setItems] = useState<ActivityChatMessage[]>([]);
   const [body, setBody] = useState('');
   const [replyTo, setReplyTo] = useState<ActivityChatMessage | null>(null);
+  const [autoReplyPendingFor, setAutoReplyPendingFor] = useState<number | null>(null);
+  const autoReplyTimerRef = useRef<number | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const composeInputRef = useRef<HTMLTextAreaElement | null>(null);
   const loadSeqRef = useRef(0);
@@ -168,6 +183,51 @@ export const SupportChatSection: React.FC<Props> = ({
     [threadUserId, scrollChatToEnd],
   );
 
+  const stopAutoReplyPending = useCallback((questionId?: number) => {
+    if (autoReplyTimerRef.current != null) {
+      window.clearTimeout(autoReplyTimerRef.current);
+      autoReplyTimerRef.current = null;
+    }
+    setAutoReplyPendingFor((cur) => (questionId == null || cur === questionId ? null : cur));
+  }, []);
+
+  const handleAutoReplyStatus = useCallback(
+    (payload: AutoReplyStatusPayload) => {
+      // Ignore status for a thread we are not currently viewing.
+      if (
+        threadUserId != null &&
+        payload.threadUserId != null &&
+        payload.threadUserId !== threadUserId
+      ) {
+        return;
+      }
+      if (payload.status === 'pending') {
+        if (autoReplyTimerRef.current != null) window.clearTimeout(autoReplyTimerRef.current);
+        setAutoReplyPendingFor(payload.questionId);
+        autoReplyTimerRef.current = window.setTimeout(() => {
+          autoReplyTimerRef.current = null;
+          setAutoReplyPendingFor((cur) => (cur === payload.questionId ? null : cur));
+        }, AUTO_REPLY_TIMEOUT_MS);
+        return;
+      }
+      // 'answered' | 'none' → the LLM finished; stop the spinner for that question.
+      stopAutoReplyPending(payload.questionId);
+    },
+    [threadUserId, stopAutoReplyPending],
+  );
+
+  // Reset the indicator when switching threads; clear the timer on unmount.
+  useEffect(() => {
+    stopAutoReplyPending();
+    return () => {
+      if (autoReplyTimerRef.current != null) window.clearTimeout(autoReplyTimerRef.current);
+    };
+  }, [threadUserId, stopAutoReplyPending]);
+
+  useEffect(() => {
+    if (autoReplyPendingFor != null) scrollChatToEnd();
+  }, [autoReplyPendingFor, scrollChatToEnd]);
+
   const handleMessageDeleted = useCallback(
     (payload: { messageId: number; inReplyToMessageId: number | null }) => {
       setItems((prev) => {
@@ -189,14 +249,21 @@ export const SupportChatSection: React.FC<Props> = ({
 
   const chatActive = isPage || expanded;
   const liveEnabled = chatActive && canView && currentUserId != null && conversationOpen;
-  const { sendMessage, approveAutoReply, rejectAutoReply, connectionStatus, retryConnection } =
-    useActivityChatSocket({
+  const {
+    sendMessage,
+    approveAutoReply,
+    rejectAutoReply,
+    editAutoReply,
+    connectionStatus,
+    retryConnection,
+  } = useActivityChatSocket({
     kind,
     resourceId,
     enabled: liveEnabled,
     threadUserId,
     onMessage: appendMessage,
     onMessageDeleted: handleMessageDeleted,
+    onAutoReplyStatus: handleAutoReplyStatus,
     onSocketError: handleSocketError,
   });
 
@@ -447,6 +514,41 @@ export const SupportChatSection: React.FC<Props> = ({
     }
   };
 
+  const onStartEdit = (message: ActivityChatMessage) => {
+    setEditingId(message.id);
+    setEditingBody(message.body);
+    setHint(null);
+  };
+
+  const onCancelEdit = () => {
+    setEditingId(null);
+    setEditingBody('');
+  };
+
+  const onSaveEdit = async (messageId: number) => {
+    const text = editingBody.trim();
+    if (!text) return;
+    setSavingEdit(true);
+    setHint(null);
+    try {
+      if (chatReady) {
+        await editAutoReply(messageId, text);
+      } else {
+        const updated =
+          kind === 'event'
+            ? await ChatApi.editEventAutoReply(resourceId, messageId, text)
+            : await ChatApi.editClubAutoReply(resourceId, messageId, text);
+        setItems((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      }
+      setEditingId(null);
+      setEditingBody('');
+    } catch (e: unknown) {
+      setHint(extractErrorMessage(e) || 'Could not save the edited answer');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const onSend = async () => {
     if (!currentUserId || !body.trim()) return;
     if (!chatReady) {
@@ -488,13 +590,9 @@ export const SupportChatSection: React.FC<Props> = ({
   const showInbox = isOrganizer && activeThreadUserId == null;
   const showConversation = !isOrganizer || activeThreadUserId != null;
 
-  const displayItems = useMemo(
-    () =>
-      isOrganizer
-        ? items
-        : items.filter((m) => !(m.isAutoReply && !m.isApproved)),
-    [items, isOrganizer],
-  );
+  // Members now see AI auto-replies immediately (no wait for organizer approval);
+  // the organizer can later verify or edit them.
+  const displayItems = items;
 
   const inboxBadgeCount =
     threadsNeedingAttention > 0 ? threadsNeedingAttention : threads.length;
@@ -809,6 +907,8 @@ export const SupportChatSection: React.FC<Props> = ({
                   const pendingAuto = isMemberQuestion ? hasPendingAutoReply(items, m.id) : false;
                   const pendingAutoMessage =
                     isOrganizer && m.isAutoReply && !m.isApproved ? m : null;
+                  const editableAuto = isOrganizer && m.isAutoReply ? m : null;
+                  const isEditingThis = editingId === m.id;
 
                   const bubbleBg = m.isAutoReply
                     ? m.isApproved
@@ -915,20 +1015,37 @@ export const SupportChatSection: React.FC<Props> = ({
                         <div className="label-small" style={{ color: metaColor }}>
                           {roleLabel(m, currentUserId, isOrganizer)} · {fmtChatDate(m.createdAt)}
                         </div>
-                        <div className="body-medium" style={{ marginTop: 4, lineHeight: '22px' }}>
-                          {m.body}
-                        </div>
+                        {isEditingThis ? (
+                          <textarea
+                            value={editingBody}
+                            onChange={(e) => setEditingBody(e.target.value)}
+                            rows={3}
+                            autoFocus
+                            style={{
+                              marginTop: 6,
+                              width: '100%',
+                              resize: 'vertical',
+                              borderRadius: 8,
+                              border: '1px solid var(--outline)',
+                              padding: '8px 10px',
+                              font: 'inherit',
+                              color: 'var(--on-surface)',
+                              background: 'var(--surface)',
+                            }}
+                          />
+                        ) : (
+                          <div className="body-medium" style={{ marginTop: 4, lineHeight: '22px' }}>
+                            {m.body}
+                          </div>
+                        )}
                       </div>
 
-                      {pendingAutoMessage ? (
+                      {editableAuto && isEditingThis ? (
                         <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button
                             type="button"
-                            onClick={() => onApproveAutoReply(pendingAutoMessage.id)}
-                            disabled={
-                              approvingId === pendingAutoMessage.id ||
-                              rejectingId === pendingAutoMessage.id
-                            }
+                            onClick={() => onSaveEdit(editableAuto.id)}
+                            disabled={savingEdit || editingBody.trim().length === 0}
                             style={{
                               borderRadius: 8,
                               padding: '6px 12px',
@@ -936,38 +1053,104 @@ export const SupportChatSection: React.FC<Props> = ({
                               color: 'var(--on-primary)',
                               fontSize: 13,
                               fontWeight: 600,
-                              opacity: approvingId === pendingAutoMessage.id ? 0.7 : 1,
+                              opacity: savingEdit || editingBody.trim().length === 0 ? 0.7 : 1,
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 4,
                             }}
                           >
                             <Icon name="check" size={16} color="var(--on-primary)" />
-                            {approvingId === pendingAutoMessage.id ? 'Approving…' : 'Approve'}
+                            {savingEdit ? 'Saving…' : 'Save & verify'}
                           </button>
                           <button
                             type="button"
-                            onClick={() => onRejectAutoReply(pendingAutoMessage.id)}
-                            disabled={
-                              approvingId === pendingAutoMessage.id ||
-                              rejectingId === pendingAutoMessage.id
-                            }
+                            onClick={onCancelEdit}
+                            disabled={savingEdit}
                             style={{
                               borderRadius: 8,
                               padding: '6px 12px',
-                              background: 'var(--error-container)',
-                              color: 'var(--error)',
+                              background: 'var(--surface-container-high)',
+                              color: 'var(--on-surface-variant)',
                               fontSize: 13,
                               fontWeight: 600,
-                              opacity: rejectingId === pendingAutoMessage.id ? 0.7 : 1,
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 4,
                             }}
                           >
-                            <Icon name="close" size={16} color="var(--error)" />
-                            {rejectingId === pendingAutoMessage.id ? 'Removing…' : 'Deny & reply'}
+                            Cancel
                           </button>
+                        </div>
+                      ) : editableAuto ? (
+                        <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {pendingAutoMessage ? (
+                            <button
+                              type="button"
+                              onClick={() => onApproveAutoReply(pendingAutoMessage.id)}
+                              disabled={
+                                approvingId === pendingAutoMessage.id ||
+                                rejectingId === pendingAutoMessage.id
+                              }
+                              style={{
+                                borderRadius: 8,
+                                padding: '6px 12px',
+                                background: 'var(--primary)',
+                                color: 'var(--on-primary)',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                opacity: approvingId === pendingAutoMessage.id ? 0.7 : 1,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <Icon name="check" size={16} color="var(--on-primary)" />
+                              {approvingId === pendingAutoMessage.id ? 'Approving…' : 'Approve'}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => onStartEdit(editableAuto)}
+                            style={{
+                              borderRadius: 8,
+                              padding: '6px 12px',
+                              background: 'var(--surface-container-high)',
+                              color: 'var(--on-surface)',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Icon name="edit" size={16} color="var(--on-surface-variant)" />
+                            Edit
+                          </button>
+                          {pendingAutoMessage ? (
+                            <button
+                              type="button"
+                              onClick={() => onRejectAutoReply(pendingAutoMessage.id)}
+                              disabled={
+                                approvingId === pendingAutoMessage.id ||
+                                rejectingId === pendingAutoMessage.id
+                              }
+                              style={{
+                                borderRadius: 8,
+                                padding: '6px 12px',
+                                background: 'var(--error-container)',
+                                color: 'var(--error)',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                opacity: rejectingId === pendingAutoMessage.id ? 0.7 : 1,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <Icon name="close" size={16} color="var(--error)" />
+                              {rejectingId === pendingAutoMessage.id ? 'Removing…' : 'Deny & reply'}
+                            </button>
+                          ) : null}
                         </div>
                       ) : null}
 
@@ -1048,7 +1231,7 @@ export const SupportChatSection: React.FC<Props> = ({
                         </div>
                       ) : null}
 
-                      {!isOrganizer && m.role === 'USER' && !hasResolvedAnswer(items, m.id) ? (
+                      {!isOrganizer && m.role === 'USER' && !hasAnyOrganizerReply(items, m.id) ? (
                         <span
                           className="label-small"
                           style={{
@@ -1065,6 +1248,29 @@ export const SupportChatSection: React.FC<Props> = ({
                     </div>
                   );
                 })}
+
+                {autoReplyPendingFor != null ? (
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 8 }}>
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: 'var(--surface-container-high)',
+                        color: 'var(--on-surface-variant)',
+                        borderRadius: bubbleRadius(false),
+                        padding: '10px 14px',
+                      }}
+                    >
+                      <Spinner size="small" />
+                      <span className="body-small">
+                        {isOrganizer
+                          ? 'AI is checking past answers and context…'
+                          : 'Looking for an instant answer…'}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {canView && currentUserId ? (

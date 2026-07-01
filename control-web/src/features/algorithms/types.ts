@@ -68,7 +68,7 @@ export const DEFAULT_ACO_PARAMS: ACOParams = {
   earlyStoppingThreshold: 50,
 };
 
-export const DEFAULT_PSO_PARAMS: PSOParams = {
+const DEFAULT_PSO_PARAMS: PSOParams = {
   swarmSize: 30,
   maxIterations: 200,
   inertia: 0.7,
@@ -91,7 +91,7 @@ export const benchmarkSetFromJson = (json: any): BenchmarkSet => ({
     : [],
 });
 
-export const acoParamsFromJson = (json: any): ACOParams => ({
+const acoParamsFromJson = (json: any): ACOParams => ({
   numAnts: num(json?.numAnts, DEFAULT_ACO_PARAMS.numAnts),
   maxIterations: num(json?.maxIterations, DEFAULT_ACO_PARAMS.maxIterations),
   alpha: num(json?.alpha, DEFAULT_ACO_PARAMS.alpha),
@@ -101,7 +101,7 @@ export const acoParamsFromJson = (json: any): ACOParams => ({
   earlyStoppingThreshold: num(json?.earlyStoppingThreshold, DEFAULT_ACO_PARAMS.earlyStoppingThreshold),
 });
 
-export const psoParamsFromJson = (json: any): PSOParams => ({
+const psoParamsFromJson = (json: any): PSOParams => ({
   swarmSize: num(json?.swarmSize, DEFAULT_PSO_PARAMS.swarmSize),
   maxIterations: num(json?.maxIterations, DEFAULT_PSO_PARAMS.maxIterations),
   inertia: num(json?.inertia, DEFAULT_PSO_PARAMS.inertia),

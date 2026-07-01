@@ -7,6 +7,7 @@ from typing import Any
 import socketio
 
 from app.chat.rooms import room_for_kind, room_for_thread
+from app.common.exceptions import AppError
 from app.core.security import user_id_from_token
 from app.db.session import SessionLocal
 from app.schemas.chat import AutoreplyOutcome, ChatMessageCreateRequest, ChatMessageDeleteResponse, ChatMessageResponse
@@ -40,7 +41,28 @@ async def _emit_message_deleted(room: str, payload: ChatMessageDeleteResponse) -
     await sio.emit("chat:message_deleted", payload.model_dump(mode="json"), room=room)
 
 
-async def _run_autoreply_task(kind: str, resource_id: int, message_id: int) -> None:
+def _room_for(kind: str, resource_id: int, thread_user_id: int | None) -> str:
+    return (
+        room_for_thread(kind, resource_id, thread_user_id)
+        if thread_user_id is not None
+        else room_for_kind(kind, resource_id)
+    )
+
+
+async def _emit_autoreply_status(
+    kind: str, resource_id: int, thread_user_id: int | None, question_id: int, status: str
+) -> None:
+    # status: "pending" (LLM is trying) | "answered" (auto-reply emitted) | "none" (no answer found)
+    await sio.emit(
+        "chat:autoreply",
+        {"questionId": question_id, "threadUserId": thread_user_id, "status": status},
+        room=_room_for(kind, resource_id, thread_user_id),
+    )
+
+
+async def _run_autoreply_task(
+    kind: str, resource_id: int, message_id: int, thread_user_id: int | None
+) -> None:
     # LLM can be slow — don't block chat_send ack.
 
     def work() -> AutoreplyOutcome:
@@ -55,15 +77,13 @@ async def _run_autoreply_task(kind: str, resource_id: int, message_id: int) -> N
 
     outcome = await asyncio.to_thread(work)
     if outcome.autoReply is None:
+        await _emit_autoreply_status(kind, resource_id, thread_user_id, message_id, "none")
         return
 
     auto = outcome.autoReply
-    room = (
-        room_for_thread(kind, resource_id, auto.threadUserId)
-        if auto.threadUserId is not None
-        else room_for_kind(kind, resource_id)
-    )
+    room = _room_for(kind, resource_id, auto.threadUserId)
     await _emit_message(room, auto)
+    await _emit_autoreply_status(kind, resource_id, auto.threadUserId, message_id, "answered")
 
     for deleted in outcome.pruned:
         delete_room = (
@@ -97,6 +117,29 @@ async def _run_approve_task(kind: str, resource_id: int, message_id: int, user_i
     )
     await _emit_message(room, approved)
     return approved
+
+
+async def _run_edit_task(
+    kind: str, resource_id: int, message_id: int, user_id: int, body: str
+) -> ChatMessageResponse | None:
+    def work() -> ChatMessageResponse:
+        db = SessionLocal()
+        try:
+            if kind == "event":
+                return chat_service.edit_event_auto_reply(db, resource_id, message_id, user_id, body)
+            return chat_service.edit_club_auto_reply(db, resource_id, message_id, user_id, body)
+        finally:
+            db.close()
+
+    try:
+        updated = await asyncio.to_thread(work)
+    except Exception:
+        log.exception("chat_edit failed kind=%s id=%s msg=%s", kind, resource_id, message_id)
+        return None
+
+    room = _room_for(kind, resource_id, updated.threadUserId)
+    await _emit_message(room, updated)
+    return updated
 
 
 async def _run_reject_task(
@@ -216,7 +259,7 @@ async def chat_join(sid: str, data: dict | None) -> dict[str, Any]:
         return {"ok": True, "room": room, "threadUserId": thread_user_id, "scope": scope}
     except PermissionError as exc:
         return {"ok": False, "error": str(exc)}
-    except ValueError as exc:
+    except AppError as exc:
         return {"ok": False, "error": str(exc)}
     finally:
         db.close()
@@ -278,11 +321,12 @@ async def chat_send(sid: str, data: dict | None) -> dict[str, Any]:
         )
         await _emit_message(room, result.message)
         if role == "USER" and not (kind == "club" and session_scope == "group"):
-            asyncio.create_task(_run_autoreply_task(kind, resource_id, result.message.id))
+            await _emit_autoreply_status(kind, resource_id, thread_id, result.message.id, "pending")
+            asyncio.create_task(_run_autoreply_task(kind, resource_id, result.message.id, thread_id))
         return {"ok": True, "messageId": result.message.id, "threadUserId": thread_id}
     except PermissionError as exc:
         return {"ok": False, "error": str(exc)}
-    except ValueError as exc:
+    except AppError as exc:
         return {"ok": False, "error": str(exc)}
     except Exception:
         log.exception("chat_send failed sid=%s", sid)
@@ -310,6 +354,30 @@ async def chat_approve(sid: str, data: dict | None) -> dict[str, Any]:
     if approved is None:
         return {"ok": False, "error": "Could not approve auto-reply"}
     return {"ok": True, "messageId": approved.id}
+
+
+@sio.event
+async def chat_edit(sid: str, data: dict | None) -> dict[str, Any]:
+    session = await sio.get_session(sid)
+    user_id = session.get("user_id")
+    if user_id is None:
+        return {"ok": False, "error": "Not authenticated"}
+
+    payload = data or {}
+    kind = str(payload.get("kind", session.get("kind", ""))).lower()
+    resource_id = payload.get("resourceId", session.get("resourceId"))
+    message_id = payload.get("messageId")
+    body = str(payload.get("body", "")).strip()
+
+    if kind not in ("event", "club") or resource_id is None or message_id is None:
+        return {"ok": False, "error": "kind, resourceId, and messageId are required"}
+    if not body:
+        return {"ok": False, "error": "body is required"}
+
+    updated = await _run_edit_task(kind, int(resource_id), int(message_id), int(user_id), body)
+    if updated is None:
+        return {"ok": False, "error": "Could not edit auto-reply"}
+    return {"ok": True, "messageId": updated.id}
 
 
 @sio.event

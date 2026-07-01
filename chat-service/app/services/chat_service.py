@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.common.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.models.activity_announcement import ActivityAnnouncement
 from app.models.activity_chat_message import ActivityChatMessage
 from app.services.context_auto_reply import (
@@ -196,6 +197,26 @@ def reject_club_auto_reply(
     return _reject_auto_reply(db, club_id=club_id, message_id=message_id)
 
 
+def edit_event_auto_reply(
+    db: Session, event_id: int, message_id: int, user_id: int, new_body: str
+) -> ChatMessageResponse:
+    user = _ensure_user(db, user_id)
+    event = _ensure_event(db, event_id)
+    if not _user_is_event_organizer(user, event):
+        raise PermissionError("Only the event organizer can edit auto-replies")
+    return _edit_auto_reply(db, event_id=event_id, message_id=message_id, new_body=new_body)
+
+
+def edit_club_auto_reply(
+    db: Session, club_id: int, message_id: int, user_id: int, new_body: str
+) -> ChatMessageResponse:
+    user = _ensure_user(db, user_id)
+    club = _ensure_club(db, club_id)
+    if not _user_is_club_organizer(db, club, user):
+        raise PermissionError("Only club admins can edit auto-replies")
+    return _edit_auto_reply(db, club_id=club_id, message_id=message_id, new_body=new_body)
+
+
 def assert_can_join_event_chat(db: Session, event_id: int, user_id: int) -> None:
     user = _ensure_user(db, user_id)
     event = _ensure_event(db, event_id)
@@ -232,7 +253,7 @@ def resolve_thread_room_user(
 def _resolve_view_thread(user: User, is_organizer: bool, requested: int | None) -> int:
     if is_organizer:
         if requested is None:
-            raise ValueError("threadUserId is required for the organizer inbox")
+            raise ValidationAppError("threadUserId is required for the organizer inbox")
         return int(requested)
     return user.id
 
@@ -246,7 +267,7 @@ def _resolve_post_thread(
 ) -> int:
     if role == "ORGANIZER":
         if requested is None:
-            raise ValueError("threadUserId is required when replying as organizer")
+            raise ValidationAppError("threadUserId is required when replying as organizer")
         _ensure_user(db, int(requested))
         return int(requested)
     return user.id
@@ -306,21 +327,21 @@ def _ensure_event(db: Session, event_id: int) -> ActivityEvent:
         select(ActivityEvent).where(ActivityEvent.id == event_id, ActivityEvent.status != "DELETED")
     ).scalar_one_or_none()
     if event is None:
-        raise ValueError("Event not found")
+        raise NotFoundError("Event not found")
     return event
 
 
 def _ensure_club(db: Session, club_id: int) -> Club:
     club = db.execute(select(Club).where(Club.id == club_id, Club.status != "DELETED")).scalar_one_or_none()
     if club is None:
-        raise ValueError("Club not found")
+        raise NotFoundError("Club not found")
     return club
 
 
 def _ensure_user(db: Session, user_id: int) -> User:
     user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if user is None:
-        raise ValueError("User not found")
+        raise NotFoundError("User not found")
     return user
 
 
@@ -660,12 +681,51 @@ def _approve_auto_reply(
         )
     ).scalar_one_or_none()
     if msg is None:
-        raise ValueError("Message not found")
+        raise NotFoundError("Message not found")
     if not msg.is_auto_reply:
-        raise ValueError("Only auto-replies can be approved")
+        raise ValidationAppError("Only auto-replies can be approved")
     if msg.is_approved:
         return _to_response(msg)
 
+    msg.is_approved = True
+    db.commit()
+    db.refresh(msg)
+    return _to_response(msg)
+
+
+def _edit_auto_reply(
+    db: Session,
+    *,
+    event_id: int | None = None,
+    club_id: int | None = None,
+    message_id: int,
+    new_body: str,
+) -> ChatMessageResponse:
+    if (event_id is None) == (club_id is None):
+        raise ValueError("Exactly one context is required")
+
+    body = new_body.strip()
+    if not body:
+        raise ValidationAppError("Message body cannot be empty")
+
+    context = (
+        ActivityChatMessage.event_id == event_id
+        if event_id is not None
+        else ActivityChatMessage.club_id == club_id
+    )
+    msg = db.execute(
+        select(ActivityChatMessage).where(
+            ActivityChatMessage.id == message_id,
+            context,
+        )
+    ).scalar_one_or_none()
+    if msg is None:
+        raise NotFoundError("Message not found")
+    if not msg.is_auto_reply:
+        raise ValidationAppError("Only auto-replies can be edited")
+
+    # Editing vets the answer: update the text and mark it verified in one step.
+    msg.body = body
     msg.is_approved = True
     db.commit()
     db.refresh(msg)
@@ -694,11 +754,11 @@ def _reject_auto_reply(
         )
     ).scalar_one_or_none()
     if msg is None:
-        raise ValueError("Message not found")
+        raise NotFoundError("Message not found")
     if not msg.is_auto_reply:
-        raise ValueError("Only auto-replies can be rejected")
+        raise ValidationAppError("Only auto-replies can be rejected")
     if msg.is_approved:
-        raise ValueError("Approved auto-replies cannot be rejected")
+        raise ConflictError("Approved auto-replies cannot be rejected")
 
     in_reply_to = msg.in_reply_to_message_id
     thread_user_id = msg.thread_user_id

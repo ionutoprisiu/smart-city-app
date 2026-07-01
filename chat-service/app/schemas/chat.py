@@ -12,6 +12,10 @@ class ChatMessageCreateRequest(BaseModel):
     threadUserId: int | None = None
 
 
+class ChatMessageEditRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=8000)
+
+
 class ChatMessageResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

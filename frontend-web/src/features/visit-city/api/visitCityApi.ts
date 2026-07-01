@@ -20,9 +20,6 @@ type LiveAttractionsArgs = {
 
 type OptimizeArgs = {
   attractionIds: number[];
-  startLat?: number | null;
-  startLon?: number | null;
-  startName?: string | null;
   routingProfile?: RoutingProfile;
 };
 
@@ -60,20 +57,12 @@ export const VisitCityApi = {
 
   async optimizeRoute({
     attractionIds,
-    startLat,
-    startLon,
-    startName,
     routingProfile = 'driving',
   }: OptimizeArgs): Promise<RouteResult> {
     try {
-      const body: Record<string, unknown> = {
-        attractionIds,
-        routingProfile,
-      };
-      if (startLat != null) body.startLatitude = startLat;
-      if (startLon != null) body.startLongitude = startLon;
-      if (startName != null && startName.trim().length > 0) body.startName = startName.trim();
-
+      // The start point is a fixed anchor (UTCN) owned by the backend/aco-service;
+      // the client only sends the selected attractions and the routing profile.
+      const body = { attractionIds, routingProfile };
       const data = await ApiClient.post('/visit-city/optimize', body);
       return routeResultFromJson(data);
     } catch (e) {

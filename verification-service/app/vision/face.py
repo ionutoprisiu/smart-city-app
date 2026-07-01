@@ -7,7 +7,7 @@ import numpy as np
 from insightface.app import FaceAnalysis
 from numpy.typing import NDArray
 
-from app.common.exceptions import VerificationInputError
+from app.common.exceptions import ValidationAppError
 from app.core.config import settings
 from app.models import FaceQuality
 from app.vision.image_utils import BGRImage, blur_variance, enhance_for_detection, resize
@@ -56,13 +56,13 @@ def _normalize_embedding(face: Face) -> NDArray[np.float32]:
     embedding = np.asarray(face.embedding, dtype=np.float32)
     norm = np.linalg.norm(embedding)
     if norm == 0:
-        raise VerificationInputError("Invalid face embedding")
+        raise ValidationAppError("Invalid face embedding")
     return embedding / norm
 
 
 def pick_best_face(pairs: list[tuple[Face, int]], *, portrait_only: bool) -> Face:
     if not pairs:
-        raise VerificationInputError("No face detected")
+        raise ValidationAppError("No face detected")
 
     min_score = settings.insightface_min_det_score
     confident = [pair for pair in pairs if _det_score(pair[0]) >= min_score]
@@ -114,7 +114,7 @@ def _detect_faces(probes: list[BGRImage]) -> list[FacePair]:
 def _extract(probes: list[BGRImage], *, portrait_only: bool, error: str) -> tuple[NDArray[np.float32], FaceQuality]:
     pairs = _detect_faces(probes)
     if not pairs:
-        raise VerificationInputError(error)
+        raise ValidationAppError(error)
 
     face = pick_best_face([(f, probe.shape[1]) for f, probe in pairs], portrait_only=portrait_only)
     probe = next(probe for f, probe in pairs if f is face)
@@ -139,7 +139,7 @@ def extract_id_portrait(image: BGRImage) -> tuple[NDArray[np.float32], FaceQuali
     probes = _id_probes(image)
     try:
         return _extract(probes, portrait_only=True, error="No face detected in id card image")
-    except VerificationInputError:
+    except ValidationAppError:
         enhanced = enhance_for_detection(image)
         return _extract(
             [image, enhanced, resize(enhanced, 1.5)],

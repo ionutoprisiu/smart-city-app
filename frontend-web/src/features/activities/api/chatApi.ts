@@ -34,7 +34,7 @@ const getJson = async (url: string): Promise<unknown> => {
   }
 };
 
-const postJson = async (url: string): Promise<unknown> => {
+const postJson = async (url: string, payload?: unknown): Promise<unknown> => {
   Logger.debug(`Chat POST: ${url}`);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -42,6 +42,7 @@ const postJson = async (url: string): Promise<unknown> => {
     const response = await fetch(url, {
       method: 'POST',
       headers: ChatConfig.getHeaders(),
+      body: payload !== undefined ? JSON.stringify(payload) : undefined,
       signal: controller.signal,
     });
     const body = await response.text();
@@ -145,5 +146,29 @@ export const ChatApi = {
       ChatConfig.getUrl(`/clubs/${clubId}/messages/${messageId}/reject`),
     );
     return chatMessageDeleteFromJson(parsed);
+  },
+
+  async editEventAutoReply(
+    eventId: number,
+    messageId: number,
+    body: string,
+  ): Promise<ActivityChatMessage> {
+    const parsed = await postJson(
+      ChatConfig.getUrl(`/events/${eventId}/messages/${messageId}/edit`),
+      { body },
+    );
+    return chatMessageFromJson(parsed);
+  },
+
+  async editClubAutoReply(
+    clubId: number,
+    messageId: number,
+    body: string,
+  ): Promise<ActivityChatMessage> {
+    const parsed = await postJson(
+      ChatConfig.getUrl(`/clubs/${clubId}/messages/${messageId}/edit`),
+      { body },
+    );
+    return chatMessageFromJson(parsed);
   },
 };

@@ -7,7 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image, ImageOps
 
-from app.common.exceptions import VerificationInputError
+from app.common.exceptions import ValidationAppError
 
 BGRImage = NDArray[np.uint8]
 
@@ -21,7 +21,7 @@ def decode_image(data: bytes) -> BGRImage:
     except Exception:
         image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
         if image is None:
-            raise VerificationInputError("Invalid image data")
+            raise ValidationAppError("Invalid image data")
         return image
 
 
