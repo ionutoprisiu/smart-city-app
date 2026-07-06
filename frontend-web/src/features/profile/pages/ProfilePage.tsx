@@ -63,8 +63,8 @@ export const ProfilePage: React.FC = () => {
     currentUser,
     logout,
     verificationReason,
-    canAccessOrganizerFlow,
-    organizerFlowBlockedReason,
+    canAccessGuideFlow,
+    guideFlowBlockedReason,
     refreshVerificationStatus,
   } = useAuthStore();
   const setAuthState = useAuthStore.setState;
@@ -79,17 +79,17 @@ export const ProfilePage: React.FC = () => {
 
   if (!currentUser) return null;
 
-  const isOrganizer = currentUser.role === 'organizer' || currentUser.role === 'admin';
+  const isGuide = currentUser.role === 'guide' || currentUser.role === 'admin';
   const verificationStatus = currentUser.verificationStatus ?? 'notSubmitted';
-  const organizerLocked = !canAccessOrganizerFlow;
-  const organizerSubtitle = (() => {
-    if (organizerFlowBlockedReason) return organizerFlowBlockedReason;
-    if (isOrganizer) return 'You are an organizer. You can create events and groups in Community.';
+  const guideLocked = !canAccessGuideFlow;
+  const guideSubtitle = (() => {
+    if (guideFlowBlockedReason) return guideFlowBlockedReason;
+    if (isGuide) return 'Poți publica tururi tematice din tab-ul Tururi.';
     if (verificationStatus === 'approved' && currentUser.isVerified) {
-      return 'Identity verified.';
+      return 'Identitate verificată.';
     }
     if (verificationStatus === 'notSubmitted') {
-      return verificationReason ?? 'Upload your ID and a selfie to apply.';
+      return verificationReason ?? 'Încarcă buletinul și un selfie pentru verificare.';
     }
     return verificationStatusLabel(verificationStatus);
   })();
@@ -133,167 +133,114 @@ export const ProfilePage: React.FC = () => {
           e.target.value = '';
         }}
       />
-      <div style={{ padding: '12px 16px 24px', maxWidth: 720, margin: '0 auto', width: '100%' }}>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            padding: 24,
-            border: '1px solid color-mix(in srgb, var(--outline-variant) 35%, transparent)',
-            borderRadius: 24,
-            background: 'color-mix(in srgb, var(--surface-container-highest) 55%, transparent)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setPhotoSheet(true)}
-            style={{
-              width: 96,
-              height: 96,
-              padding: 3,
-              border: '2px solid color-mix(in srgb, var(--primary) 35%, transparent)',
-              borderRadius: 48,
-              position: 'relative',
-            }}
-          >
+
+      <div className="profile-hero">
+        <button type="button" className="avatar-ring" onClick={() => setPhotoSheet(true)}>
+          <div className="avatar-inner">
             {currentUser.profilePhotoUri ? (
               <img
                 src={currentUser.profilePhotoUri}
-                alt="Profile"
-                style={{ width: '100%', height: '100%', borderRadius: 44, objectFit: 'cover' }}
+                alt="Profil"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: 44,
-                  background: 'var(--primary-container)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <span className="headline-small" style={{ color: 'var(--on-primary-container)' }}>
-                  {initials}
-                </span>
-              </div>
+              <span className="headline-small" style={{ color: 'var(--on-primary-container)' }}>
+                {initials}
+              </span>
             )}
-            <span
-              style={{
-                position: 'absolute',
-                right: -2,
-                bottom: -2,
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                background: 'var(--primary)',
-                border: '2px solid #FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon name="photo-camera" size={14} color="var(--on-primary)" />
-            </span>
-          </button>
-
-          <div className="title-large" style={{ marginTop: 12 }}>{fullName(currentUser)}</div>
-          <div className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 6 }}>
-            {currentUser.email}
           </div>
+          <span className="avatar-edit">
+            <Icon name="photo-camera" size={15} color="var(--on-primary)" />
+          </span>
+        </button>
 
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              marginTop: 12,
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-            }}
-          >
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '6px 12px',
-                borderRadius: 16,
-                border: '1px solid var(--outline-variant)',
-              }}
-            >
-              <Icon
-                name={currentUser.role === 'admin' ? 'admin-panel-settings' : 'person'}
-                size={16}
-                color="var(--primary)"
-              />
-              <span className="label-medium" style={{ marginLeft: 6 }}>
-                {roleDisplay(currentUser.role)}
-              </span>
-            </span>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '6px 12px',
-                borderRadius: 16,
-                background: vTone.bg,
-              }}
-            >
-              <Icon name={vTone.icon} size={16} color={vTone.color} />
-              <span className="label-medium" style={{ marginLeft: 6, color: vTone.color }}>
-                {verificationStatusLabel(currentUser.verificationStatus)}
-              </span>
-            </span>
-          </div>
+        <div className="headline-small" style={{ marginTop: 16 }}>{fullName(currentUser)}</div>
+        <div className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 4 }}>
+          {currentUser.email}
         </div>
 
-        <div style={{ marginTop: 16 }}>
-          <div
-            className="label-medium"
-            style={{
-              color: 'var(--on-surface-variant)',
-              letterSpacing: 0.8,
-              marginLeft: 6,
-              marginBottom: 10,
-            }}
-          >
-            ACCOUNT
-          </div>
-          <div
-            style={{
-              borderRadius: 24,
-              overflow: 'hidden',
-              background: 'color-mix(in srgb, var(--surface-container-highest) 55%, transparent)',
-            }}
-          >
-            <ProfileTile
-              icon="photo-camera"
-              title="Profile photo"
-              subtitle={
-                currentUser.profilePhotoUri
-                  ? 'Click to update or remove photo'
-                  : 'Add a profile photo'
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            marginTop: 14,
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+          }}
+        >
+          <span className="profile-chip">
+            <Icon
+              name={
+                currentUser.role === 'admin'
+                  ? 'admin-panel-settings'
+                  : isGuide
+                  ? 'tour'
+                  : 'person'
               }
-              onPress={() => setPhotoSheet(true)}
+              size={15}
+              color="var(--primary)"
             />
-            <div
-              style={{
-                height: 1,
-                marginLeft: 56,
-                background: 'color-mix(in srgb, var(--outline) 12%, transparent)',
-              }}
+            {roleDisplay(currentUser.role)}
+          </span>
+          <span className="profile-chip" style={{ background: vTone.bg, color: vTone.color }}>
+            <Icon name={vTone.icon} size={15} color={vTone.color} />
+            {verificationStatusLabel(currentUser.verificationStatus)}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ padding: '18px 16px 28px', maxWidth: 720, margin: '0 auto', width: '100%' }}>
+        {/* Guide journey — the card that ties verification to publishing tours. */}
+        <button
+          type="button"
+          className={`guide-cta rise-in${isGuide ? ' done' : ''}`}
+          disabled={guideLocked}
+          onClick={() => navigate('/become-guide')}
+        >
+          <span className="gc-icon">
+            <Icon name={isGuide ? 'verified' : 'verified-user'} size={24} color="#ffffff" />
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span className="title-medium" style={{ display: 'block' }}>
+              {isGuide ? 'Ești ghid verificat' : 'Devino ghid'}
+            </span>
+            <span
+              className="body-small"
+              style={{ color: 'var(--on-surface-variant)', display: 'block', marginTop: 3 }}
+            >
+              {guideSubtitle}
+            </span>
+          </span>
+          {!isGuide ? (
+            <Icon
+              name={guideLocked ? vTone.icon : 'arrow-forward'}
+              size={22}
+              color={guideLocked ? 'var(--outline)' : 'var(--primary)'}
             />
-            <ProfileTile
-              icon="verified-user"
-              title="Become an organizer"
-              subtitle={organizerSubtitle}
-              rightIcon={organizerLocked ? vTone.icon : 'chevron-right'}
-              rightColor={organizerLocked ? 'var(--outline)' : vTone.color}
-              disabled={organizerLocked}
-              onPress={() => navigate('/become-organizer')}
-            />
-          </div>
+          ) : null}
+        </button>
+
+        <div
+          className="label-medium"
+          style={{
+            color: 'var(--on-surface-variant)',
+            letterSpacing: 0.8,
+            margin: '22px 6px 10px',
+          }}
+        >
+          CONT
+        </div>
+        <div className="profile-section">
+          <ProfileTile
+            icon="photo-camera"
+            title="Poză de profil"
+            subtitle={
+              currentUser.profilePhotoUri
+                ? 'Apasă pentru a schimba sau șterge poza'
+                : 'Adaugă o poză de profil'
+            }
+            onPress={() => setPhotoSheet(true)}
+          />
         </div>
 
         <button
@@ -307,27 +254,27 @@ export const ProfilePage: React.FC = () => {
             width: '100%',
             border: '1.5px solid color-mix(in srgb, var(--error) 45%, transparent)',
             borderRadius: 16,
-            marginTop: 28,
+            marginTop: 26,
           }}
         >
           <Icon name="logout" size={20} color="var(--error)" />
           <span className="label-large" style={{ color: 'var(--error)', marginLeft: 8 }}>
-            Sign out
+            Deconectare
           </span>
         </button>
       </div>
 
       <BottomSheet open={photoSheet} onClose={() => setPhotoSheet(false)}>
         <div style={{ padding: '8px 20px 28px' }}>
-          <div className="title-large">Profile photo</div>
+          <div className="title-large">Poză de profil</div>
           <div className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 4 }}>
-            Choose an action
+            Alege o acțiune
           </div>
           <div style={{ height: 16 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <SheetAction
               icon="photo-library"
-              label="Choose image"
+              label="Alege o imagine"
               onPress={() => {
                 setPhotoSheet(false);
                 photoInputRef.current?.click();
@@ -336,7 +283,7 @@ export const ProfilePage: React.FC = () => {
             {currentUser.profilePhotoUri ? (
               <SheetAction
                 icon="delete-outline"
-                label="Remove photo"
+                label="Șterge poza"
                 destructive
                 onPress={() => {
                   setPhotoSheet(false);
@@ -350,22 +297,22 @@ export const ProfilePage: React.FC = () => {
 
       <BottomSheet open={logoutSheet} onClose={() => setLogoutSheet(false)}>
         <div style={{ padding: '8px 20px 28px' }}>
-          <div className="title-large">Sign out?</div>
+          <div className="title-large">Te deconectezi?</div>
           <div className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 4 }}>
-            You'll need to sign in again to access your profile.
+            Va trebui să te autentifici din nou pentru a-ți accesa contul.
           </div>
           <div style={{ height: 16 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <SheetAction
               icon="logout"
-              label="Sign out"
+              label="Deconectare"
               destructive
               onPress={async () => {
                 setLogoutSheet(false);
                 await logout();
               }}
             />
-            <SheetAction icon="close" label="Cancel" onPress={() => setLogoutSheet(false)} />
+            <SheetAction icon="close" label="Renunță" onPress={() => setLogoutSheet(false)} />
           </div>
         </div>
       </BottomSheet>

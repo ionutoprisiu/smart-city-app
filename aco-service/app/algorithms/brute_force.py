@@ -1,3 +1,8 @@
+"""Exact TSP by trying every permutation.
+
+Gives the true optimum used as the reference in benchmarks, but grows as O(n!),
+so it is capped at a small n (only feasible up to ~12 points).
+"""
 from __future__ import annotations
 
 from itertools import permutations
@@ -19,6 +24,7 @@ def brute_force(cost_matrix: list[list[float]], max_points: int = DEFAULT_MAX_PO
 
     best_route: list[int] = []
     best_cost = float("inf")
+    # Node 0 stays fixed as the start; permute only the attractions after it.
     for perm in permutations(range(1, num_points)):
         route = [0, *perm]
         cost = calculate_route_cost(route, cost_matrix)

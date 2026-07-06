@@ -13,6 +13,8 @@ BGRImage = NDArray[np.uint8]
 
 
 def decode_image(data: bytes) -> BGRImage:
+    # Prefer Pillow: it honours the EXIF orientation phones write, so a rotated
+    # photo is decoded upright. Fall back to raw OpenCV decoding if Pillow can't.
     try:
         pil_image = Image.open(BytesIO(data))
         pil_image = ImageOps.exif_transpose(pil_image).convert("RGB")
@@ -26,6 +28,8 @@ def decode_image(data: bytes) -> BGRImage:
 
 
 def enhance_for_detection(image: BGRImage) -> BGRImage:
+    # CLAHE on the luminance (L) channel only: boosts local contrast without
+    # shifting colours, which helps detect faces in dim or unevenly-lit photos.
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l_channel, a_channel, b_channel = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -39,6 +43,8 @@ def resize(image: BGRImage, scale: float) -> BGRImage:
 
 
 def blur_variance(crop: BGRImage | None) -> float:
+    # Sharpness proxy: variance of the Laplacian. Low value = blurry (few edges),
+    # high value = sharp. Feeds the image-quality gate.
     if crop is None or crop.size == 0:
         return 0.0
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop

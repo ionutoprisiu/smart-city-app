@@ -11,6 +11,27 @@ import {
 } from '@shared/types/verification';
 import { useAuthStore } from '@features/auth/store/authStore';
 
+const STEPS = [
+  { icon: 'badge', text: 'Încarcă buletinul' },
+  { icon: 'photo-camera-front', text: 'Adaugă un selfie' },
+  { icon: 'verified', text: 'Devii ghid instant' },
+];
+
+// Visual tone per verification status, for the status pill.
+const statusTone = (status: VerificationStatus) => {
+  switch (status) {
+    case 'approved':
+      return { icon: 'check-circle', color: 'var(--primary)', bg: 'color-mix(in srgb, var(--primary) 13%, transparent)' };
+    case 'rejected':
+      return { icon: 'cancel', color: 'var(--error)', bg: 'var(--error-container)' };
+    case 'manualReview':
+    case 'pending':
+      return { icon: 'pending-actions', color: '#8a6d00', bg: 'color-mix(in srgb, #f5c518 22%, transparent)' };
+    default:
+      return { icon: 'badge', color: 'var(--on-surface-variant)', bg: 'var(--surface-container-high)' };
+  }
+};
+
 export const VerificationPage: React.FC = () => {
   const navigate = useNavigate();
   const {
@@ -31,6 +52,7 @@ export const VerificationPage: React.FC = () => {
 
   const status: VerificationStatus = currentUser?.verificationStatus ?? 'notSubmitted';
   const uploadLocked = !verificationCanSubmit;
+  const tone = statusTone(status);
 
   useEffect(() => {
     refreshVerificationStatus();
@@ -46,79 +68,102 @@ export const VerificationPage: React.FC = () => {
       const outcome = updated?.verificationStatus ?? 'notSubmitted';
       const body =
         outcome === 'approved'
-          ? 'Face match passed. You are now an organizer and can create events in Community.'
+          ? 'Fețele se potrivesc. Ești acum ghid și poți publica tururi.'
           : outcome === 'manualReview'
-            ? 'Face match looks OK but image quality needs an admin decision. You cannot upload again until then.'
+            ? 'Potrivirea pare bună, dar calitatea imaginii cere decizia unui administrator. Nu poți încărca din nou până atunci.'
             : outcome === 'rejected'
-              ? 'Verification was rejected. Contact support or wait for an admin to allow a new submission.'
-              : 'Your documents were submitted.';
+              ? 'Verificarea a fost respinsă. Așteaptă ca un administrator să permită o nouă încercare.'
+              : 'Documentele au fost trimise.';
       setNotice(body);
-      setTimeout(() => navigate(-1), 1600);
+      setTimeout(() => navigate(-1), 1800);
     }
   };
 
-  const statusColor = (() => {
-    switch (status) {
-      case 'approved':
-        return 'var(--primary)';
-      case 'rejected':
-        return 'var(--error)';
-      case 'manualReview':
-      case 'pending':
-        return 'var(--tertiary, var(--primary))';
-      case 'notSubmitted':
-      default:
-        return 'var(--on-surface-variant)';
-    }
-  })();
+  const canSubmit = !uploadLocked && !!idCardImage && !!selfieImage && !isLoading;
 
   return (
     <div className="app-shell">
-      <StackHeader title="Become an organizer" />
+      <StackHeader title="Devino ghid" />
       <LoadingOverlay isLoading={isLoading}>
         <div className="app-content" style={{ overflowY: 'auto' }}>
-          <div style={{ padding: 16, maxWidth: 720, margin: '0 auto', width: '100%' }}>
-            <div className="title-medium">
-              Upload your ID card and a matching selfie. When InsightFace confirms your identity,
-              you become an organizer immediately. If image quality is unclear, an admin will
-              review your case.
+          <div className="verify-hero">
+            <div style={{ maxWidth: 720, margin: '0 auto' }}>
+              <span className="vc-eyebrow">
+                <Icon name="verified-user" size={14} /> VERIFICARE DE IDENTITATE
+              </span>
+              <div className="headline-small" style={{ marginTop: 8 }}>Devino ghid</div>
+              <p className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 6, maxWidth: 520 }}>
+                Confirmăm că ești o persoană reală comparând fața din buletin cu un selfie.
+                Dacă se potrivesc, devii ghid pe loc și poți publica tururi.
+              </p>
+              <div className="verify-steps">
+                {STEPS.map((s, i) => (
+                  <div key={i} className="verify-step">
+                    <span className="vs-num">{i + 1}</span>
+                    <Icon name={s.icon} size={20} color="var(--primary-strong)" />
+                    <span className="vs-text">{s.text}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="status-pill" style={{ background: tone.bg, color: tone.color }}>
+                <Icon name={tone.icon} size={15} color={tone.color} />
+                {verificationStatusLabel(status)}
+              </div>
             </div>
-            <div className="body-medium" style={{ color: statusColor, marginTop: 8 }}>
-              Status: {verificationStatusLabel(status)}
-            </div>
+          </div>
+
+          <div className="page" style={{ paddingTop: 18 }}>
             {uploadLocked && verificationBlockedReason ? (
-              <div className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 8 }}>
+              <div
+                className="body-small"
+                style={{
+                  padding: '11px 14px',
+                  borderRadius: 12,
+                  background: 'var(--surface-container-high)',
+                  color: 'var(--on-surface-variant)',
+                  marginBottom: 14,
+                  fontWeight: 600,
+                }}
+              >
                 {verificationBlockedReason}
               </div>
             ) : null}
 
-            <div style={{ height: 18 }} />
-            <div style={{ opacity: uploadLocked ? 0.45 : 1 }}>
-              <ImagePickCard
-                title="ID card image"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: uploadLocked ? 0.5 : 1 }}>
+              <UploadZone
+                icon="badge"
+                title="Buletin de identitate"
+                hint="Fotografiază sau încarcă poza buletinului"
                 file={idCardImage}
                 disabled={uploadLocked}
                 onPicked={setIdCardImage}
               />
-              <div style={{ height: 12 }} />
-              <ImagePickCard
-                title="Selfie image"
+              <UploadZone
+                icon="photo-camera-front"
+                title="Selfie"
+                hint="O poză clară cu fața ta, bine luminată"
                 file={selfieImage}
                 disabled={uploadLocked}
                 onPicked={setSelfieImage}
               />
             </div>
 
-            <div style={{ height: 12 }} />
-            {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
+            {errorMessage ? (
+              <div style={{ marginTop: 12 }}>
+                <ErrorMessage message={errorMessage} />
+              </div>
+            ) : null}
+
             {notice ? (
               <div
-                className="body-medium"
+                className="body-medium rise-in"
                 style={{
-                  padding: 12,
-                  borderRadius: 12,
+                  padding: 13,
+                  borderRadius: 14,
+                  marginTop: 12,
                   background: 'color-mix(in srgb, var(--primary-container) 55%, transparent)',
                   color: 'var(--on-primary-container)',
+                  fontWeight: 600,
                 }}
               >
                 {notice}
@@ -126,40 +171,56 @@ export const VerificationPage: React.FC = () => {
             ) : null}
 
             {verificationReason || verificationScore != null ? (
-              <div
-                style={{
-                  padding: 14,
-                  borderRadius: 14,
-                  border: '1px solid var(--outline-variant)',
-                  background: 'color-mix(in srgb, var(--surface-container-highest) 40%, transparent)',
-                  marginTop: 12,
-                }}
-              >
-                <div className="title-small">Analysis details</div>
-                <div style={{ height: 8 }} />
+              <div className="verify-analysis">
+                <div className="title-small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="insights" size={16} color="var(--primary-strong)" />
+                  Detalii analiză
+                </div>
                 {verificationScore != null ? (
-                  <div className="body-medium">Score: {verificationScore.toFixed(3)}</div>
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span className="body-small" style={{ color: 'var(--on-surface-variant)' }}>
+                        Scor de potrivire facială
+                      </span>
+                      <span className="label-medium">{verificationScore.toFixed(3)}</span>
+                    </div>
+                    <div className="va-bar">
+                      <div
+                        className="va-bar-fill"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, verificationScore * 100))}%`,
+                          background:
+                            verificationScore >= 0.55 ? 'var(--primary)' : 'var(--error)',
+                        }}
+                      />
+                    </div>
+                    <div className="body-small" style={{ color: 'var(--on-surface-variant)', marginTop: 5 }}>
+                      Prag de aprobare: 0.55
+                    </div>
+                  </div>
                 ) : null}
                 {verificationReason ? (
-                  <div className="body-medium">Reason: {verificationReason}</div>
+                  <div className="body-small" style={{ color: 'var(--on-surface-variant)', marginTop: 10 }}>
+                    Motiv: {verificationReason}
+                  </div>
                 ) : null}
               </div>
             ) : null}
 
-            <div style={{ height: 16 }} />
+            <div style={{ height: 18 }} />
             <AppButton
-              label="Refresh analysis data"
-              variant="outlined"
-              iconName="refresh"
-              disabled={isLoading}
-              onPress={() => refreshVerificationStatus()}
+              label="Trimite spre verificare"
+              iconName="verified-user"
+              disabled={!canSubmit}
+              onPress={submit}
             />
             <div style={{ height: 10 }} />
             <AppButton
-              label="Submit identity verification"
-              iconName="verified-user"
-              disabled={uploadLocked || !idCardImage || !selfieImage || isLoading}
-              onPress={submit}
+              label="Reîmprospătează starea"
+              variant="text"
+              iconName="refresh"
+              disabled={isLoading}
+              onPress={() => refreshVerificationStatus()}
             />
             <div style={{ height: 24 }} />
           </div>
@@ -169,15 +230,19 @@ export const VerificationPage: React.FC = () => {
   );
 };
 
-type ImagePickCardProps = {
+type UploadZoneProps = {
+  icon: string;
   title: string;
+  hint: string;
   file: File | null;
   disabled?: boolean;
   onPicked: (file: File) => void;
 };
 
-const ImagePickCard: React.FC<ImagePickCardProps> = ({
+const UploadZone: React.FC<UploadZoneProps> = ({
+  icon,
   title,
+  hint,
   file,
   disabled = false,
   onPicked,
@@ -195,21 +260,17 @@ const ImagePickCard: React.FC<ImagePickCardProps> = ({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  const openPicker = () => {
-    if (disabled) return;
-    inputRef.current?.click();
+  const open = () => {
+    if (!disabled) inputRef.current?.click();
   };
+
+  const filled = file != null;
 
   return (
     <div
-      style={{
-        padding: 14,
-        borderRadius: 14,
-        border: '1px solid var(--outline-variant)',
-        background: disabled
-          ? 'color-mix(in srgb, var(--surface-container-highest) 27%, transparent)'
-          : 'transparent',
-      }}
+      className={`upload-zone${filled ? ' filled' : ''}${disabled ? ' locked' : ''}`}
+      onClick={open}
+      role="button"
     >
       <input
         ref={inputRef}
@@ -222,58 +283,39 @@ const ImagePickCard: React.FC<ImagePickCardProps> = ({
           e.target.value = '';
         }}
       />
-      {previewUrl ? (
-        <img
-          src={previewUrl}
-          alt={title}
-          style={{
-            width: '100%',
-            height: 180,
-            borderRadius: 10,
-            marginBottom: 10,
-            objectFit: 'cover',
-          }}
-        />
-      ) : null}
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <span
-          className="body-medium"
-          style={{
-            flex: 1,
-            color: disabled ? 'var(--outline)' : 'var(--on-surface)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {file == null ? `${title} (not selected)` : file.name}
-        </span>
-        <button
-          type="button"
-          onClick={openPicker}
-          disabled={disabled}
-          style={{ padding: 8, display: 'flex' }}
-        >
-          <Icon
-            name="photo-camera"
-            size={22}
-            color={disabled ? 'var(--outline)' : 'var(--on-surface-variant)'}
-          />
-        </button>
-        <button
-          type="button"
-          onClick={openPicker}
-          disabled={disabled}
-          style={{ padding: '8px 12px' }}
-        >
-          <span
-            className="label-large"
-            style={{ color: disabled ? 'var(--outline)' : 'var(--primary)' }}
-          >
-            Choose file
+      {previewUrl ? <img src={previewUrl} alt={title} className="uz-preview" /> : null}
+
+      {filled ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Icon name="check-circle" size={20} color="#1b7f4a" />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span className="title-small" style={{ display: 'block' }}>{title}</span>
+            <span
+              className="body-small"
+              style={{
+                color: 'var(--on-surface-variant)',
+                display: 'block',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {file!.name}
+            </span>
           </span>
-        </button>
-      </div>
+          <span className="label-medium" style={{ color: 'var(--primary)' }}>Schimbă</span>
+        </div>
+      ) : (
+        <>
+          <span className="uz-icon">
+            <Icon name={icon} size={24} color="var(--primary-strong)" />
+          </span>
+          <div className="title-small">{title}</div>
+          <div className="body-small" style={{ color: 'var(--on-surface-variant)', marginTop: 3 }}>
+            {hint}
+          </div>
+        </>
+      )}
     </div>
   );
 };

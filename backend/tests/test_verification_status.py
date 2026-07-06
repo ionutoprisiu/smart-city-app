@@ -90,7 +90,7 @@ def test_get_status_returns_admin_approved_status(client_factory) -> None:
     assert body["role"] == "USER"
     assert body["isVerified"] is True
     assert body["canSubmit"] is False
-    assert body["canAccessOrganizerFlow"] is True
+    assert body["canAccessGuideFlow"] is True
     assert body["submitBlockedReason"] == "Your identity is already verified."
 
 
@@ -99,7 +99,7 @@ def test_get_status_not_submitted_can_submit(client_factory) -> None:
     body = _get_status(client)
     assert body["canSubmit"] is True
     assert body["submitBlockedReason"] is None
-    assert body["canAccessOrganizerFlow"] is True
+    assert body["canAccessGuideFlow"] is True
 
 
 def test_get_status_manual_review_blocks_submit(client_factory) -> None:
@@ -117,7 +117,7 @@ def test_get_status_rejected_blocks_submit(client_factory) -> None:
 
 
 def test_get_status_organizer_blocks_submit(client_factory) -> None:
-    client = client_factory(status=VerificationStatus.APPROVED, role=Role.ORGANIZER)
+    client = client_factory(status=VerificationStatus.APPROVED, role=Role.GUIDE)
     body = _get_status(client)
     assert body["canSubmit"] is False
-    assert body["submitBlockedReason"] == "You are already an organizer."
+    assert body["submitBlockedReason"] == "You are already a guide."

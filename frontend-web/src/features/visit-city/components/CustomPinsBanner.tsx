@@ -35,7 +35,7 @@ export const CustomPinsBanner: React.FC<Props> = ({ count, onClearAll }) => (
       {count} custom pin{count === 1 ? '' : 's'} on map
     </span>
     <button type="button" onClick={onClearAll} style={{ padding: '8px 12px', borderRadius: 10 }}>
-      <span className="label-large" style={{ color: 'var(--primary)' }}>Clear all</span>
+      <span className="label-large" style={{ color: 'var(--primary)' }}>Șterge tot</span>
     </button>
   </div>
 );

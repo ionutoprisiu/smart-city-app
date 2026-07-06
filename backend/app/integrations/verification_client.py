@@ -29,6 +29,7 @@ async def submit(
 
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            # multipart/form-data: the two images travel as file parts, userId as a field.
             response = await client.post(
                 url,
                 data={"userId": str(user_id)},

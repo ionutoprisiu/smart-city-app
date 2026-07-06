@@ -25,6 +25,6 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
             response.raise_for_status()
             return response.json()
     except httpx.ConnectError as exc:
-        raise AcoServiceError("ACO service is not available. Is the Python service running?") from exc
+        raise AcoServiceError("Serviciul de optimizare este momentan indisponibil. Încearcă din nou în câteva momente.") from exc
     except httpx.HTTPStatusError as exc:
-        raise AcoServiceError(f"ACO service error: {exc}") from exc
+        raise AcoServiceError("Serviciul de optimizare a întâmpinat o eroare. Încearcă din nou.") from exc

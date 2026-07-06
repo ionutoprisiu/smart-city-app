@@ -22,5 +22,5 @@ class VerificationStatusResponse(BaseModel):
     metadata: dict | None = None
     canSubmit: bool = False
     submitBlockedReason: str | None = None
-    canAccessOrganizerFlow: bool = False
-    organizerFlowBlockedReason: str | None = None
+    canAccessGuideFlow: bool = False
+    guideFlowBlockedReason: str | None = None

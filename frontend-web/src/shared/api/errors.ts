@@ -14,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-export const messageFromResponseBody = (body: string, fallback = 'Request failed'): string => {
+export const messageFromResponseBody = (body: string, fallback = 'Cererea a eșuat. Verifică conexiunea și încearcă din nou.'): string => {
   try {
     const json = JSON.parse(body);
     if (json && typeof json === 'object') {

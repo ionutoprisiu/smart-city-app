@@ -39,11 +39,11 @@ export const MapControlsCard: React.FC<Props> = ({
     {hasRoute ? (
       <>
         {routeStarted ? (
-          <button type="button" className="map-fab" onClick={onModify} title="Modify route">
+          <button type="button" className="map-fab" onClick={onModify} title="Modifică traseul">
             <Icon name="edit" size={20} />
           </button>
         ) : null}
-        <button type="button" className="map-fab" onClick={onClear} title="Clear route">
+        <button type="button" className="map-fab" onClick={onClear} title="Șterge traseul">
           <Icon name="close" size={20} color="var(--error)" />
         </button>
       </>

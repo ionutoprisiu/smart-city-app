@@ -11,16 +11,18 @@ from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest
 
 
 def register(db: Session, req: RegisterRequest) -> AuthResponse:
+    # Email and phone must be unique — reject early with 409 before creating anything.
     if db.execute(select(User).where(User.email == req.email)).scalar_one_or_none():
-        raise ConflictError("Email already exists")
+        raise ConflictError("Există deja un cont cu acest email")
 
     phone = req.phone_number
     if phone and db.execute(select(User).where(User.phone_number == phone)).scalar_one_or_none():
-        raise ConflictError("Phone number already exists")
+        raise ConflictError("Există deja un cont cu acest număr de telefon")
 
     user = User(
         email=req.email,
-        password=hash_password(req.password),
+        password=hash_password(req.password),  # never store the plaintext password
+
         first_name=(req.first_name or "").strip() or " ",
         last_name=(req.last_name or "").strip() or " ",
         phone_number=phone,
@@ -38,8 +40,9 @@ def register(db: Session, req: RegisterRequest) -> AuthResponse:
 
 def login(db: Session, req: LoginRequest) -> AuthResponse:
     user = db.execute(select(User).where(User.email == req.email)).scalar_one_or_none()
+    # Same generic error whether the email or the password is wrong (don't reveal which).
     if user is None or not verify_password(req.password, user.password):
-        raise UnauthorizedError("Invalid email or password")
+        raise UnauthorizedError("Email sau parolă incorecte")
 
     user.last_login = datetime.now()
     db.commit()

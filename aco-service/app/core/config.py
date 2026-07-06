@@ -8,15 +8,17 @@ DEFAULT_PUBLIC_OSRM = "https://router.project-osrm.org"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
+    # Separate OSRM instances per profile; fall back to the public server if unset.
     osrm_base_url: str = DEFAULT_PUBLIC_OSRM
     osrm_foot_base_url: str | None = None
     osrm_driving_base_url: str | None = None
     http_osrm_timeout_seconds: float = 25.0
 
+    # Only used to estimate travel time when OSRM gives no durations (Haversine mode).
     walking_speed_kmh: float = 4.0
     driving_speed_kmh: float = 28.0
 
-    aco_seed: int = 42
+    aco_seed: int = 42  # fixed seed -> reproducible routes; set negative for random
 
     @property
     def aco_seed_value(self) -> int | None:

@@ -9,6 +9,10 @@ class AttractionRequest(BaseModel):
     id: int = Field(..., gt=0)
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
+    # Orienteering-only fields: the prize for visiting this attraction and how
+    # long the visit takes. Ignored by the classic visit-everything flow.
+    score: float | None = Field(default=None, ge=0)
+    visitDurationMinutes: float | None = Field(default=None, ge=0, le=600)
 
 
 class OptimizeRequest(BaseModel):
@@ -17,6 +21,10 @@ class OptimizeRequest(BaseModel):
     attractions: list[AttractionRequest] = Field(..., min_length=1, max_length=MAX_ATTRACTIONS)
     useOsrm: bool = Field(default=True)
     routingProfile: str = Field(default="driving")
+    # When set, the request becomes an Orienteering Problem: visit the subset
+    # of attractions that maximizes total score within this many minutes
+    # (travel + visits). When None, classic behavior: visit everything.
+    timeBudgetMinutes: float | None = Field(default=None, gt=0, le=1440)
 
     @field_validator("routingProfile")
     @classmethod
@@ -34,6 +42,7 @@ class RouteStepResponse(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
     distanceToNext: float | None = Field(default=None, ge=0)
+    estimatedVisitTime: int | None = Field(default=None, ge=0)
 
 
 class OptimizeResponse(BaseModel):
@@ -47,3 +56,8 @@ class OptimizeResponse(BaseModel):
     routeSegments: list[list[dict]] = Field(default_factory=list)
     usedOsrm: bool = False
     routingProfile: str = "driving"
+    # Orienteering-only extras: total prize collected, the attractions that did
+    # not fit in the budget, and the budget echoed back. None on classic runs.
+    collectedScore: float | None = None
+    skippedAttractionIds: list[int] = Field(default_factory=list)
+    timeBudgetMinutes: float | None = None

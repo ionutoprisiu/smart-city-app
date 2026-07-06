@@ -31,13 +31,16 @@ _STATUS_BY_ERROR: list[tuple[type[AppError], int]] = [
 
 def register_exception_handlers(app: FastAPI) -> None:
     def _make_handler(status_code: int):
-        async def handler(_request: Request, exc: AppError) -> JSONResponse:
+        async def handler(_request: Request, exc: Exception) -> JSONResponse:
             return JSONResponse(status_code=status_code, content={"detail": str(exc)})
 
         return handler
 
     for error_type, status_code in _STATUS_BY_ERROR:
         app.add_exception_handler(error_type, _make_handler(status_code))
+
+    # Built-in PermissionError means "not allowed for this role" -> 403.
+    app.add_exception_handler(PermissionError, _make_handler(403))
 
     @app.exception_handler(AppError)
     async def handle_app_error(_request: Request, exc: AppError) -> JSONResponse:

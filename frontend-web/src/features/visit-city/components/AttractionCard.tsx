@@ -76,6 +76,11 @@ export const AttractionCard: React.FC<Props> = ({
           >
             {categoryLabel(attraction.category)}
           </span>
+          {attraction.importanceScore > 0 ? (
+            <span className="score-chip" title="Scor de importanță">
+              ★ {attraction.importanceScore.toFixed(1)}
+            </span>
+          ) : null}
           {isSelected ? (
             <span
               className="label-small"
@@ -88,7 +93,7 @@ export const AttractionCard: React.FC<Props> = ({
               }}
             >
               <Icon name="route" size={12} />
-              In route
+              În traseu
             </span>
           ) : null}
         </div>
@@ -97,7 +102,7 @@ export const AttractionCard: React.FC<Props> = ({
       <button
         type="button"
         className={`select-btn${isSelected ? ' selected' : ''}`}
-        title={isSelected ? 'Remove from route' : 'Add to route'}
+        title={isSelected ? 'Scoate din traseu' : 'Adaugă în traseu'}
         onClick={(e) => {
           e.stopPropagation();
           onToggleSelection();

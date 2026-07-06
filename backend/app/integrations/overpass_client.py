@@ -21,6 +21,8 @@ def execute_query(query: str) -> dict[str, Any]:
 
 
 def build_around_query(lat: float, lon: float, radius_m: float) -> str:
+    # Overpass QL: fetch named POIs (tourism/amenity/historic/...) within a radius.
+    # "out center meta" returns a representative point for ways/areas too.
     around = f"around:{radius_m},{lat},{lon}"
     return (
         f"[out:json][timeout:25];("

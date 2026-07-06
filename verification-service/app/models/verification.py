@@ -10,13 +10,16 @@ class VerificationStatus(StrEnum):
     REJECTED = "REJECTED"
 
 
+# Immutable value objects (dataclasses, not DB rows — this service has no database).
 @dataclass(frozen=True)
 class FaceQuality:
-    det_score: float
-    min_dim: float
-    blur: float
+    det_score: float   # detector confidence
+    min_dim: float     # shorter side of the face box, in pixels
+    blur: float        # Laplacian variance (sharpness)
 
     def passes(self, *, min_face_px: int, min_blur: float, min_det_score: float) -> bool:
+        # A face is "good enough" only if it is big enough, sharp enough, and
+        # detected confidently — all three must hold.
         return (
             self.min_dim >= min_face_px
             and self.blur >= min_blur

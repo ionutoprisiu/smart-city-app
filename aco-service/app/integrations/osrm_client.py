@@ -1,3 +1,11 @@
+"""Client for the two OSRM endpoints used by the optimizer:
+
+  * /table  -> cost matrices (duration + distance) between all points, for ACO;
+  * /route  -> the real road geometry for the final ordered tour, for the map.
+
+Every network path degrades gracefully: on any failure it returns None (matrix)
+or straight-line fallbacks (geometry), so the request never hard-fails.
+"""
 from __future__ import annotations
 
 import logging
@@ -40,6 +48,7 @@ def _table_matrices_from_json(points: list[dict], data: dict) -> tuple[list[list
             if i == j:
                 continue
             dd = raw_d[i][j]
+            # OSRM returns metres; convert to km. None = unroutable pair -> sentinel.
             dist_m[i][j] = MISSING_EDGE_KM if dd is None else float(dd) / 1000.0
             if raw_t is not None:
                 tt = raw_t[i][j]
@@ -54,6 +63,7 @@ async def fetch_matrices(
 ) -> tuple[list[list[float]] | None, list[list[float]] | None]:
     prof = normalize_profile(profile)
     base = settings.osrm_url_for_profile(prof)
+    # OSRM wants lon,lat (not lat,lon); annotations asks for BOTH matrices at once.
     coords = ";".join(f"{p['longitude']},{p['latitude']}" for p in points)
     url = f"{base}/table/v1/{prof}/{coords}?annotations=distance,duration"
 
@@ -113,8 +123,9 @@ async def fetch_route_details(
     full_geometry = _coords_from_geojson(route.get("geometry") or {})
     legs = route.get("legs") or []
     leg_durations_sec = [float(leg.get("duration", 0)) for leg in legs]
-    segments = _legs_to_segments(legs)
+    segments = _legs_to_segments(legs)  # one road-snapped polyline per waypoint pair
 
+    # If OSRM didn't give one clean leg per pair, re-split the full line ourselves.
     expected_legs = len(ordered_points) - 1
     if len(segments) != expected_legs or any(len(seg) < 2 for seg in segments):
         segments = _split_geometry_by_waypoints(full_geometry, ordered_points)
@@ -191,6 +202,8 @@ def _split_geometry_by_waypoints(
     if len(geometry) < 2 or len(ordered_points) < 2:
         return [_straight_line(a, b) for a, b in _consecutive_pairs(ordered_points)]
 
+    # Walk the full polyline and cut it at the geometry point closest to each
+    # waypoint, so every leg gets its own slice (search only moves forward).
     split_indices = [0]
     search_from = 0
     for waypoint in ordered_points[1:]:

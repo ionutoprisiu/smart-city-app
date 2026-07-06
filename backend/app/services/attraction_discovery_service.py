@@ -1,3 +1,8 @@
+"""Turns raw OpenStreetMap POIs (from Overpass) into TouristAttraction rows.
+
+The heuristics here decide what counts as an attraction, which category it is, and
+how "important" it is — all derived from OSM tags, since OSM has no such fields.
+"""
 from __future__ import annotations
 
 import logging
@@ -16,6 +21,8 @@ CITY = "Cluj-Napoca"
 
 
 def discover_attractions(lat: float, lon: float, radius_km: float) -> list[TouristAttraction]:
+    # Prefer a precise city-boundary query; fall back to a radius search if it
+    # returns nothing. Any failure yields an empty list — discovery is best-effort.
     try:
         log.info("Discovering attractions in %s (city-wide)", CITY)
         city_wide = _parse_response(
@@ -63,6 +70,8 @@ def _dedupe_attractions(attractions: list[TouristAttraction]) -> list[TouristAtt
 
 
 def _dedupe_key(attraction: TouristAttraction) -> str:
+    # Same name at ~the same spot (coords rounded to ~10 m) = one attraction. OSM
+    # often has a node and a way for the same place; this collapses the duplicates.
     name = (attraction.name or "").strip().lower()
     lat = round(attraction.latitude * 10000)
     lon = round(attraction.longitude * 10000)
@@ -125,6 +134,8 @@ _CATEGORY_BASE_SCORE: dict[AttractionCategory, float] = {
 
 
 def _compute_importance(tags: dict[str, Any], category: AttractionCategory) -> float:
+    # Rank attractions for the catalog: start from a per-category base, then reward
+    # signals of real significance (Wikidata/Wikipedia links, heritage status, ...).
     score = _CATEGORY_BASE_SCORE.get(category, 1.0)
     if tags.get("wikidata"):
         score += 3.0
@@ -142,6 +153,8 @@ def _compute_importance(tags: dict[str, Any], category: AttractionCategory) -> f
 
 
 def _determine_category(tags: dict[str, Any]) -> AttractionCategory:
+    # Map OSM tags to our internal categories, in priority order:
+    # tourism > amenity > historic/leisure. First match wins.
     tourism = tags.get("tourism")
     if tourism:
         t = str(tourism).lower()

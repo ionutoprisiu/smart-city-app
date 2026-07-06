@@ -3,7 +3,7 @@ import enum
 
 class Role(str, enum.Enum):
     USER = "USER"
-    ORGANIZER = "ORGANIZER"
+    GUIDE = "GUIDE"
     ADMIN = "ADMIN"
 
 

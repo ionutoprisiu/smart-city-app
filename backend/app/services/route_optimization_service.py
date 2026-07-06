@@ -1,3 +1,9 @@
+"""Bridges the Visit City request to aco-service.
+
+Loads the chosen attractions from the DB, forwards them to aco-service (which owns
+the fixed UTCN start), and reshapes the reply for the client. All the optimization
+happens in aco-service; this file just translates in and out.
+"""
 from __future__ import annotations
 
 import logging
@@ -21,18 +27,22 @@ def optimize_route(
     db: Session,
     attraction_ids: list[int],
     routing_profile: str,
+    *,
+    time_budget_minutes: float | None = None,
+    visit_durations: dict[int, float] | None = None,
 ) -> dict[str, Any]:
     if not attraction_ids:
         raise ValidationAppError("At least 1 attraction required")
 
     profile = _normalize_routing_profile(routing_profile)
     attractions = _find_attractions_ordered(db, attraction_ids)
-    body = _build_aco_body(attractions, profile)
+    body = _build_aco_body(attractions, profile, time_budget_minutes, visit_durations)
 
     log.info("Calling ACO optimize with routingProfile=%s", profile)
     try:
         raw = aco_optimize(body)
     except AcoServiceError as exc:
+        # aco-service down/unreachable -> 503 so the client can retry, not a 500.
         raise ServiceUnavailableError(str(exc)) from exc
 
     response = _parse_aco_response(raw)
@@ -72,10 +82,12 @@ def _find_attractions_ordered(db: Session, ids: list[int]) -> list[TouristAttrac
 def _build_aco_body(
     attractions: list[TouristAttraction],
     routing_profile: str,
+    time_budget_minutes: float | None = None,
+    visit_durations: dict[int, float] | None = None,
 ) -> dict[str, Any]:
     # Only attractions + profile are sent; aco-service injects the fixed UTCN
     # start anchor itself (single source of truth for the start point).
-    return {
+    body: dict[str, Any] = {
         "attractions": [
             {
                 "id": a.id,
@@ -87,6 +99,17 @@ def _build_aco_body(
         "routingProfile": routing_profile,
         "useOsrm": True,
     }
+    if time_budget_minutes is not None:
+        # Orienteering mode: the catalog importance score is the prize, the
+        # guide's visit durations are the per-node time price.
+        body["timeBudgetMinutes"] = time_budget_minutes
+        durations = visit_durations or {}
+        for entry, attraction in zip(body["attractions"], attractions):
+            entry["score"] = attraction.importance_score
+            duration = durations.get(attraction.id)
+            if duration is not None:
+                entry["visitDurationMinutes"] = duration
+    return body
 
 
 def _parse_aco_response(body: dict[str, Any]) -> dict[str, Any]:
@@ -119,7 +142,7 @@ def _parse_aco_response(body: dict[str, Any]) -> dict[str, Any]:
     travel_min = body.get("travelTimeMinutes")
     visit_min = body.get("visitTimeMinutes")
 
-    return {
+    result = {
         "steps": steps,
         "totalDistance": float(body["totalDistance"]),
         "totalTime": total_time_val,
@@ -131,6 +154,12 @@ def _parse_aco_response(body: dict[str, Any]) -> dict[str, Any]:
         "usedOsrm": used_osrm,
         "routingProfile": str(routing_profile),
     }
+    # Orienteering extras (present only on budget-constrained runs).
+    if body.get("collectedScore") is not None:
+        result["collectedScore"] = float(body["collectedScore"])
+        result["skippedAttractionIds"] = [int(i) for i in body.get("skippedAttractionIds", [])]
+        result["timeBudgetMinutes"] = body.get("timeBudgetMinutes")
+    return result
 
 
 def _enrich_step_names(

@@ -1,3 +1,8 @@
+"""Attraction catalog for Visit City: read the stored catalog and sync it from OSM.
+
+Route optimization itself is delegated to route_optimization_service; this file
+only manages the list of attractions the user picks from.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -162,6 +167,8 @@ def _find_existing(db: Session, discovered: TouristAttraction) -> TouristAttract
 
 
 def _batch_upsert(db: Session, attractions: list[TouristAttraction]) -> list[TouristAttraction]:
+    # Idempotent sync: match each discovered POI to an existing row (by name + near
+    # coords); update its score if changed, insert only the genuinely new ones.
     result: list[TouristAttraction] = []
     new_items: list[TouristAttraction] = []
     changed = False

@@ -35,6 +35,8 @@ type VisitCityState = {
 
   loadAttractions: () => Promise<void>;
   optimizeRoute: () => Promise<void>;
+  applyTour: (attractionIds: number[], profile: RoutingProfile) => Promise<void>;
+  applyTourRoute: (attractionIds: number[], result: RouteResult) => void;
   clearRoute: () => void;
   startRoute: () => void;
   stopRoute: () => void;
@@ -128,7 +130,7 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
     const backendIds = selectedIds.filter((id) => id > 0);
 
     if (!get().canOptimize()) {
-      set({ errorMessage: 'Select at least one attraction.' });
+      set({ errorMessage: 'Alege cel puțin o atracție.' });
       return;
     }
 
@@ -149,6 +151,31 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
     } finally {
       set({ isOptimizing: false });
     }
+  },
+
+  // Open a guide's tour: preselect its attractions, set the profile, and optimize
+  // with ACO — reusing the exact same flow as a manual selection.
+  applyTour: async (attractionIds, profile) => {
+    set({
+      selectedIds: attractionIds,
+      routingProfile: profile,
+      routeStarted: false,
+      routeResult: null,
+    });
+    await get().optimizeRoute();
+  },
+
+  // Load a route already optimized by the tours endpoint (possibly under a
+  // time budget — Orienteering). Selection mirrors the tour's candidates so
+  // every stop AND every skipped attraction stays visible on the map.
+  applyTourRoute: (attractionIds, result) => {
+    set({
+      selectedIds: attractionIds,
+      routingProfile: result.routingProfile,
+      routeResult: result,
+      routeStarted: false,
+      errorMessage: null,
+    });
   },
 
   clearRoute: () => {

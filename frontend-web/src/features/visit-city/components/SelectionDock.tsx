@@ -41,23 +41,24 @@ export const SelectionDock: React.FC<Props> = ({
     <div className="glass-panel" style={{ borderRadius: 22, padding: '12px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="segmented">
-          {renderSegment('driving', 'directions-car', 'Drive')}
-          {renderSegment('foot', 'directions-walk', 'Walk')}
+          {renderSegment('driving', 'directions-car', 'Mașină')}
+          {renderSegment('foot', 'directions-walk', 'Pe jos')}
         </div>
 
         <span className="label-large" style={{ color: 'var(--on-surface-variant)', flex: 1 }}>
-          <span style={{ color: 'var(--primary-strong)', fontWeight: 700 }}>{count}</span> selected
+          <span style={{ color: 'var(--primary-strong)', fontWeight: 700 }}>{count}</span>{' '}
+          {count === 1 ? 'selectat' : 'selectate'}
         </span>
 
         <button type="button" onClick={onClear} style={{ padding: '6px 8px', borderRadius: 10 }}>
-          <span className="label-large" style={{ color: 'var(--on-surface-variant)' }}>Clear</span>
+          <span className="label-large" style={{ color: 'var(--on-surface-variant)' }}>Șterge</span>
         </button>
 
         <button
           type="button"
           onClick={() => onOptimize?.()}
           disabled={isOptimizing || onOptimize == null}
-          title="Optimize route"
+          title="Optimizează traseul"
           style={{
             height: 42,
             padding: '0 18px',
@@ -80,7 +81,7 @@ export const SelectionDock: React.FC<Props> = ({
           ) : (
             <>
               <Icon name="auto-awesome" size={17} color="var(--on-primary)" />
-              Optimize
+              Optimizează
             </>
           )}
         </button>
@@ -98,7 +99,7 @@ export const SelectionDock: React.FC<Props> = ({
           }}
         >
           <Icon name="info-outline" size={13} />
-          Pick at least one place to visit.
+          Alege cel puțin un obiectiv de vizitat.
         </div>
       ) : null}
     </div>

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppButton } from '@shared/components/AppButton';
 import { CustomTextField } from '@shared/components/CustomTextField';
-import { Icon } from '@shared/components/Icon';
 import { LoadingOverlay } from '@shared/components/LoadingOverlay';
 import { Validators } from '@shared/utils/validators';
 import { useAuthStore } from '../store/authStore';
@@ -19,10 +18,10 @@ export const RegisterPage: React.FC = () => {
   const [showFieldErrors, setShowFieldErrors] = useState(false);
 
   const firstNameError = showFieldErrors
-    ? Validators.required('First name')(firstName)
+    ? Validators.required('Prenumele')(firstName)
     : undefined;
   const lastNameError = showFieldErrors
-    ? Validators.required('Last name')(lastName)
+    ? Validators.required('Numele')(lastName)
     : undefined;
   const emailError = showFieldErrors ? Validators.email(email) : undefined;
   const passwordError = showFieldErrors ? Validators.password(password) : undefined;
@@ -31,8 +30,8 @@ export const RegisterPage: React.FC = () => {
   const handleRegister = async () => {
     setShowFieldErrors(true);
     if (
-      Validators.required('First name')(firstName) ||
-      Validators.required('Last name')(lastName) ||
+      Validators.required('Prenumele')(firstName) ||
+      Validators.required('Numele')(lastName) ||
       Validators.email(email) ||
       Validators.password(password) ||
       Validators.phone(phone)
@@ -52,43 +51,28 @@ export const RegisterPage: React.FC = () => {
   return (
     <div className="app-shell">
       <LoadingOverlay isLoading={isLoading}>
-        <div className="app-content">
+        <div className="auth-page" style={{ alignItems: 'flex-start', overflowY: 'auto' }}>
           <form
-            className="page"
-            style={{ maxWidth: 480 }}
+            className="auth-card rise-in"
             onSubmit={(e) => {
               e.preventDefault();
               handleRegister();
             }}
           >
-            <div
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                background: 'var(--primary-container)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto',
-              }}
-            >
-              <Icon name="person-add" size={38} color="var(--primary)" />
+            <div className="auth-brand">
+              <div className="brand-badge">🗺️</div>
+              <span className="brand-eyebrow-line">Smart City · Cluj-Napoca</span>
+              <div className="headline-small">Creează-ți contul</div>
+              <div
+                className="body-medium"
+                style={{ color: 'var(--on-surface-variant)', marginTop: 6 }}
+              >
+                Câteva detalii și ești gata de explorat.
+              </div>
             </div>
-            <div style={{ height: 24 }} />
-            <div className="headline-small" style={{ textAlign: 'center' }}>
-              Join Smart City
-            </div>
-            <div
-              className="body-medium"
-              style={{ color: 'var(--on-surface-variant)', textAlign: 'center', marginTop: 8 }}
-            >
-              A few details and you're ready to explore.
-            </div>
-            <div style={{ height: 32 }} />
 
             <CustomTextField
-              label="First name"
+              label="Prenume"
               hint="Ion"
               value={firstName}
               onChangeText={setFirstName}
@@ -97,7 +81,7 @@ export const RegisterPage: React.FC = () => {
             />
             <div style={{ height: 16 }} />
             <CustomTextField
-              label="Last name"
+              label="Nume"
               hint="Popescu"
               value={lastName}
               onChangeText={setLastName}
@@ -107,7 +91,7 @@ export const RegisterPage: React.FC = () => {
             <div style={{ height: 16 }} />
             <CustomTextField
               label="Email"
-              hint="you@example.com"
+              hint="tu@exemplu.com"
               value={email}
               onChangeText={setEmail}
               type="email"
@@ -116,8 +100,8 @@ export const RegisterPage: React.FC = () => {
             />
             <div style={{ height: 16 }} />
             <CustomTextField
-              label="Password"
-              hint="At least 6 characters"
+              label="Parolă"
+              hint="Minim 6 caractere"
               value={password}
               onChangeText={setPassword}
               obscureText
@@ -126,7 +110,7 @@ export const RegisterPage: React.FC = () => {
             />
             <div style={{ height: 16 }} />
             <CustomTextField
-              label="Phone (optional)"
+              label="Telefon (opțional)"
               hint="07xx xxx xxx"
               value={phone}
               onChangeText={setPhone}
@@ -143,10 +127,10 @@ export const RegisterPage: React.FC = () => {
             ) : null}
 
             <div style={{ height: 24 }} />
-            <AppButton label="Create account" onPress={handleRegister} disabled={isLoading} />
+            <AppButton label="Creează cont" onPress={handleRegister} disabled={isLoading} />
             <div style={{ height: 16 }} />
             <AppButton
-              label="Already have an account? Sign in"
+              label="Ai deja cont? Autentifică-te"
               variant="text"
               onPress={() => navigate('/login')}
             />

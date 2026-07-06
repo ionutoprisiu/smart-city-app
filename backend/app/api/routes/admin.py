@@ -106,14 +106,14 @@ def list_users(
     return admin_service.list_users(db)
 
 
-@router.post("/users/{user_id}/promote-organizer")
-def promote_organizer(
+@router.post("/users/{user_id}/promote-guide")
+def promote_guide(
     user_id: int,
     _admin_id: int = Depends(require_admin_user_id),
     db: Session = Depends(get_db),
 ):
     try:
-        return admin_service.promote_to_organizer(db, user_id)
+        return admin_service.promote_to_guide(db, user_id)
     except ValueError as exc:
         raise _map_value_error(exc) from exc
 

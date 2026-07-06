@@ -46,7 +46,7 @@ def _seed(db: Any) -> dict[str, int]:
         password=hash_password("secret"),
         first_name="Organizer",
         last_name="User",
-        role=Role.ORGANIZER.value,
+        role=Role.GUIDE.value,
         is_verified=True,
         is_approved=True,
         verification_status=VerificationStatus.APPROVED.value,
@@ -101,9 +101,9 @@ def test_admin_promotes_verified_user(client: TestClient) -> None:
     user_id = client.ids["verified_user_id"]  # type: ignore[attr-defined]
     headers = _auth_header(admin_id)
 
-    response = client.post(f"/api/admin/users/{user_id}/promote-organizer", headers=headers)
+    response = client.post(f"/api/admin/users/{user_id}/promote-guide", headers=headers)
     assert response.status_code == 200
-    assert response.json()["role"] == "ORGANIZER"
+    assert response.json()["role"] == "GUIDE"
 
 
 def test_admin_demotes_organizer_to_user(client: TestClient) -> None:
@@ -127,7 +127,7 @@ def test_cannot_promote_after_demote_without_reverification(client: TestClient) 
     demote = client.post(f"/api/admin/users/{organizer_id}/demote-user", headers=headers)
     assert demote.status_code == 200
 
-    promote = client.post(f"/api/admin/users/{organizer_id}/promote-organizer", headers=headers)
+    promote = client.post(f"/api/admin/users/{organizer_id}/promote-guide", headers=headers)
     assert promote.status_code == 400
 
 
@@ -153,7 +153,7 @@ def test_demoted_organizer_can_resubmit_verification(client: TestClient) -> None
     assert body["isVerified"] is False
     assert body["status"] == "NOT_SUBMITTED"
     assert body["canSubmit"] is True
-    assert body["canAccessOrganizerFlow"] is True
+    assert body["canAccessGuideFlow"] is True
 
 
 def test_demote_rejects_regular_user(client: TestClient) -> None:
@@ -176,7 +176,7 @@ def test_admin_resets_user_verification(client: TestClient) -> None:
     assert body["verificationStatus"] == "NOT_SUBMITTED"
     assert body["isVerified"] is False
 
-    promote = client.post(f"/api/admin/users/{user_id}/promote-organizer", headers=headers)
+    promote = client.post(f"/api/admin/users/{user_id}/promote-guide", headers=headers)
     assert promote.status_code == 400
 
 

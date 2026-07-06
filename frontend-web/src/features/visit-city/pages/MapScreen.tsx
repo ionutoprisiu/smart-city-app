@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { AppButton } from '@shared/components/AppButton';
 import { BottomSheet } from '@shared/components/BottomSheet';
+import { AttractionDetailsSheet } from '../components/AttractionDetailsSheet';
 import { Icon } from '@shared/components/Icon';
 import { CustomPinsBanner } from '../components/CustomPinsBanner';
 import { MapControlsCard } from '../components/MapControlsCard';
@@ -547,7 +548,6 @@ export const MapScreen: React.FC = () => {
 
   const mapRef = useRef<L.Map | null>(null);
   const didFitRoute = useRef(false);
-  const lastMarkerTapRef = useRef<{ id: number; ts: number } | null>(null);
   const [details, setDetails] = useState<Attraction | null>(null);
   const [pinOptions, setPinOptions] = useState<Attraction | null>(null);
   const [clusterPicker, setClusterPicker] = useState<Extract<
@@ -652,22 +652,10 @@ export const MapScreen: React.FC = () => {
       });
   }, [clusterPicker, attractionById, selectedSet]);
 
+  // A single tap on a marker always opens the details sheet first (with the
+  // Add/Remove action inside) — more intuitive than toggling selection blindly.
   const handleAttractionMarkerPress = (attraction: Attraction) => {
-    if (routeResult != null || routeStarted) {
-      setDetails(attraction);
-      return;
-    }
-
-    const now = Date.now();
-    const last = lastMarkerTapRef.current;
-    if (last != null && last.id === attraction.id && now - last.ts < 330) {
-      lastMarkerTapRef.current = null;
-      setDetails(attraction);
-      return;
-    }
-
-    lastMarkerTapRef.current = { id: attraction.id, ts: now };
-    toggleSelection(attraction.id);
+    setDetails(attraction);
   };
 
   const handleClusterPress = (marker: Extract<DisplayMarker, { kind: 'cluster' }>) => {
@@ -888,7 +876,7 @@ export const MapScreen: React.FC = () => {
             ) : null}
             <div style={{ height: 16 }} />
             <AppButton
-              label="Close"
+              label="Închide"
               variant="outlined"
               iconName="close"
               onPress={() => setClusterPicker(null)}
@@ -897,36 +885,12 @@ export const MapScreen: React.FC = () => {
         ) : null}
       </BottomSheet>
 
-      <BottomSheet open={details != null} onClose={() => setDetails(null)}>
-        {details ? (
-          <div style={{ padding: '8px 20px 28px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 28, marginRight: 12 }}>{categoryIcon(details.category)}</span>
-              <span className="title-large" style={{ flex: 1 }}>{details.name}</span>
-            </div>
-            <div className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 8 }}>
-              {categoryLabel(details.category)}
-            </div>
-            <div className="body-large" style={{ marginTop: 12 }}>{details.description}</div>
-            <div style={{ display: 'flex', alignItems: 'center', marginTop: 16 }}>
-              <Icon name="location-on" size={16} color="var(--primary)" />
-              <span className="body-medium" style={{ marginLeft: 6 }}>
-                {details.latitude.toFixed(4)}, {details.longitude.toFixed(4)}
-              </span>
-            </div>
-            <div style={{ height: 16 }} />
-            <AppButton
-              label={isSelected(details.id) ? 'Remove from route' : 'Add to route'}
-              variant={isSelected(details.id) ? 'destructive' : 'filled'}
-              iconName={isSelected(details.id) ? 'remove-circle-outline' : 'add-circle-outline'}
-              onPress={() => {
-                toggleSelection(details.id);
-                setDetails(null);
-              }}
-            />
-          </div>
-        ) : null}
-      </BottomSheet>
+      <AttractionDetailsSheet
+        attraction={details}
+        isSelected={details != null && isSelected(details.id)}
+        onToggleSelection={() => details && toggleSelection(details.id)}
+        onClose={() => setDetails(null)}
+      />
 
       <BottomSheet open={pinOptions != null} onClose={() => setPinOptions(null)}>
         {pinOptions ? (
@@ -942,7 +906,7 @@ export const MapScreen: React.FC = () => {
             </div>
             <div style={{ height: 20 }} />
             <AppButton
-              label="Remove Pin"
+              label="Șterge pinul"
               variant="outlined"
               iconName="delete-outline"
               onPress={() => {

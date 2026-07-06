@@ -40,15 +40,15 @@ export const verificationStatusToApi = (status: VerificationStatus): string => {
 export const verificationStatusLabel = (status: VerificationStatus): string => {
   switch (status) {
     case 'approved':
-      return 'Approved';
+      return 'Verificat';
     case 'rejected':
-      return 'Rejected';
+      return 'Respins';
     case 'manualReview':
-      return 'Manual review';
+      return 'În verificare';
     case 'pending':
-      return 'Pending';
+      return 'În așteptare';
     case 'notSubmitted':
     default:
-      return 'Not submitted';
+      return 'Neverificat';
   }
 };

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppButton } from '@shared/components/AppButton';
 import { CustomTextField } from '@shared/components/CustomTextField';
-import { Icon } from '@shared/components/Icon';
 import { LoadingOverlay } from '@shared/components/LoadingOverlay';
 import { Validators } from '@shared/utils/validators';
 import { useAuthStore } from '../store/authStore';
@@ -28,45 +27,29 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="app-shell">
       <LoadingOverlay isLoading={isLoading}>
-        <div className="app-content">
+        <div className="auth-page">
           <form
-            className="page"
-            style={{ maxWidth: 480 }}
+            className="auth-card rise-in"
             onSubmit={(e) => {
               e.preventDefault();
               handleLogin();
             }}
           >
-            <div style={{ height: 24 }} />
-            <div
-              style={{
-                width: 88,
-                height: 88,
-                borderRadius: 44,
-                background: 'var(--primary-container)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto',
-              }}
-            >
-              <Icon name="lock-open" size={40} color="var(--primary)" />
+            <div className="auth-brand">
+              <div className="brand-badge">🗺️</div>
+              <span className="brand-eyebrow-line">Smart City · Cluj-Napoca</span>
+              <div className="headline-small">Bine ai revenit</div>
+              <div
+                className="body-medium"
+                style={{ color: 'var(--on-surface-variant)', marginTop: 6 }}
+              >
+                Trasee optime prin oraș, construite de algoritm.
+              </div>
             </div>
-            <div style={{ height: 32 }} />
-            <div className="headline-small" style={{ textAlign: 'center' }}>
-              Welcome back
-            </div>
-            <div
-              className="body-medium"
-              style={{ color: 'var(--on-surface-variant)', textAlign: 'center', marginTop: 8 }}
-            >
-              Sign in to explore Cluj and plan your visits.
-            </div>
-            <div style={{ height: 32 }} />
 
             <CustomTextField
               label="Email"
-              hint="you@example.com"
+              hint="tu@exemplu.com"
               value={email}
               onChangeText={setEmail}
               validator={Validators.email}
@@ -76,8 +59,8 @@ export const LoginPage: React.FC = () => {
             />
             <div style={{ height: 16 }} />
             <CustomTextField
-              label="Password"
-              hint="Your password"
+              label="Parolă"
+              hint="Parola ta"
               value={password}
               onChangeText={setPassword}
               validator={Validators.password}
@@ -94,10 +77,10 @@ export const LoginPage: React.FC = () => {
             ) : null}
 
             <div style={{ height: 24 }} />
-            <AppButton label="Sign in" onPress={handleLogin} disabled={isLoading} />
+            <AppButton label="Autentificare" onPress={handleLogin} disabled={isLoading} />
             <div style={{ height: 16 }} />
             <AppButton
-              label="No account yet? Create one"
+              label="Nu ai cont? Creează unul"
               variant="text"
               onPress={() => navigate('/register')}
             />

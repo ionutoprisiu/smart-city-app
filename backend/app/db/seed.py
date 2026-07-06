@@ -58,6 +58,8 @@ def seed_admin_user_if_enabled(db: Session) -> None:
 
 
 def seed_core_attractions_if_empty(db: Session) -> None:
+    # Guarantee a usable catalog even offline: insert a curated Cluj list only when
+    # the table is empty (the OSM sync later enriches it).
     count = db.execute(select(func.count()).select_from(TouristAttraction)).scalar_one()
     if count and int(count) > 0:
         return

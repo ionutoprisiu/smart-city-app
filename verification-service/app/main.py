@@ -10,7 +10,7 @@ from app.services import warm_up_models
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    warm_up_models()
+    warm_up_models()  # load InsightFace at startup so the first /verify isn't slow
     yield
 
 

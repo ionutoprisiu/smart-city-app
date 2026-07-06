@@ -1,3 +1,8 @@
+"""Eligibility rules for the identity-verification flow.
+
+Each function answers "can this user do X right now?" from their current status,
+returning (allowed, reason) so the UI can both block the action and explain why.
+"""
 from __future__ import annotations
 
 from app.models.enums import Role, VerificationStatus
@@ -5,6 +10,7 @@ from app.models.user import User
 
 
 def parse_stored_status(raw: str) -> VerificationStatus:
+    # Tolerate unknown/corrupt values by treating them as REJECTED (fail closed).
     try:
         return VerificationStatus(raw)
     except ValueError:
@@ -12,8 +18,10 @@ def parse_stored_status(raw: str) -> VerificationStatus:
 
 
 def submit_eligibility(user: User) -> tuple[bool, str | None]:
-    if user.role in (Role.ADMIN.value, Role.ORGANIZER.value):
-        return False, "You are already an organizer."
+    # Only a plain USER in NOT_SUBMITTED may upload; every other state is blocked
+    # with a specific reason (already guide, under review, locked, etc.).
+    if user.role in (Role.ADMIN.value, Role.GUIDE.value):
+        return False, "You are already a guide."
 
     status = parse_stored_status(user.verification_status)
     if status == VerificationStatus.NOT_SUBMITTED:
@@ -29,9 +37,9 @@ def submit_eligibility(user: User) -> tuple[bool, str | None]:
     return False, "Upload is not available right now."
 
 
-def organizer_flow_eligibility(user: User) -> tuple[bool, str | None]:
-    if user.role in (Role.ADMIN.value, Role.ORGANIZER.value):
-        return False, "You are already an organizer."
+def guide_flow_eligibility(user: User) -> tuple[bool, str | None]:
+    if user.role in (Role.ADMIN.value, Role.GUIDE.value):
+        return False, "You are already a guide."
 
     status = parse_stored_status(user.verification_status)
     if status == VerificationStatus.MANUAL_REVIEW:

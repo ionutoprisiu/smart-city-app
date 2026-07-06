@@ -37,7 +37,7 @@ def test_register_and_login_return_bearer_token(client: TestClient) -> None:
     assert body.get("accessToken")
     token = body["accessToken"]
 
-    mine = client.get("/api/activities/clubs/mine", headers={"Authorization": f"Bearer {token}"})
+    mine = client.get("/api/tours/mine", headers={"Authorization": f"Bearer {token}"})
     assert mine.status_code == 200
     assert mine.json() == []
 

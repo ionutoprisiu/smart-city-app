@@ -1,13 +1,18 @@
+"""Pure cost utilities shared by every algorithm — no I/O, no state."""
 from __future__ import annotations
 
 import math
 
 EARTH_RADIUS_KM = 6371.0
+# Sentinel costs for pairs OSRM cannot route (isolated points): large enough that
+# the optimizer avoids such edges, but finite so arithmetic stays well-defined.
 MISSING_EDGE_KM = 1e6
 MISSING_EDGE_SEC = 864_000.0
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    # Great-circle distance between two lat/lon points — the geometric fallback
+    # when OSRM is unavailable (straight line, ignores the street network).
     lat1_r, lon1_r = math.radians(lat1), math.radians(lon1)
     lat2_r, lon2_r = math.radians(lat2), math.radians(lon2)
     dlat = lat2_r - lat1_r
@@ -17,10 +22,11 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 def calculate_distance_matrix(points: list[dict]) -> list[list[float]]:
+    # Full symmetric km matrix between all points (used when OSRM is off).
     n = len(points)
     matrix = [[0.0] * n for _ in range(n)]
     for i in range(n):
-        for j in range(i + 1, n):
+        for j in range(i + 1, n):  # compute once per pair, mirror across the diagonal
             d = haversine_distance(
                 points[i]["latitude"],
                 points[i]["longitude"],

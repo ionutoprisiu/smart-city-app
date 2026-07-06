@@ -66,7 +66,7 @@ export const StorageService = {
   saveUserRole: (role: Role) => safeSet(KEYS.userRole, role),
   getUserRole: (): Role | null => {
     const value = safeGet(KEYS.userRole);
-    if (value === 'user' || value === 'organizer' || value === 'admin') return value;
+    if (value === 'user' || value === 'guide' || value === 'admin') return value;
     return null;
   },
 

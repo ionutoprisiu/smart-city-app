@@ -7,7 +7,7 @@ import { roleFromString } from '@shared/types/role';
 export type VerificationSubmitResponse = {
   userId: number;
   status: VerificationStatus;
-  role: 'user' | 'organizer' | 'admin';
+  role: 'user' | 'guide' | 'admin';
   isVerified: boolean;
   score: number | null;
   reason: string;
@@ -16,15 +16,15 @@ export type VerificationSubmitResponse = {
 export type VerificationStatusResponse = {
   userId: number;
   status: VerificationStatus;
-  role: 'user' | 'organizer' | 'admin';
+  role: 'user' | 'guide' | 'admin';
   isVerified: boolean;
   score: number | null;
   reason: string | null;
   metadata: Record<string, unknown> | null;
   canSubmit: boolean;
   submitBlockedReason: string | null;
-  canAccessOrganizerFlow: boolean;
-  organizerFlowBlockedReason: string | null;
+  canAccessGuideFlow: boolean;
+  guideFlowBlockedReason: string | null;
 };
 
 export const verificationSubmitFromJson = (json: any): VerificationSubmitResponse => ({
@@ -54,9 +54,9 @@ export const verificationStatusResponseFromJson = (
   canSubmit: Boolean(json?.canSubmit),
   submitBlockedReason:
     typeof json?.submitBlockedReason === 'string' ? json.submitBlockedReason : null,
-  canAccessOrganizerFlow: Boolean(json?.canAccessOrganizerFlow),
-  organizerFlowBlockedReason:
-    typeof json?.organizerFlowBlockedReason === 'string'
-      ? json.organizerFlowBlockedReason
+  canAccessGuideFlow: Boolean(json?.canAccessGuideFlow),
+  guideFlowBlockedReason:
+    typeof json?.guideFlowBlockedReason === 'string'
+      ? json.guideFlowBlockedReason
       : null,
 });

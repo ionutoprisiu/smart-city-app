@@ -14,13 +14,15 @@ from app.schemas.verification import VerificationStatusResponse, VerificationSub
 from app.services import verification_storage
 from app.services.verification_access import (
     ensure_can_submit,
-    organizer_flow_eligibility,
+    guide_flow_eligibility,
     parse_stored_status,
     submit_eligibility,
 )
 
 
 def _apply_verification_outcome(user: User, status: VerificationStatus, *, reason: str) -> None:
+    # Translate the verification-service verdict into user state. APPROVED is the
+    # only status that grants the guide role; anything else clears verification.
     user.verification_status = status.value
     user.verification_reason = reason
 
@@ -28,8 +30,8 @@ def _apply_verification_outcome(user: User, status: VerificationStatus, *, reaso
         user.is_verified = True
         user.is_approved = True
         user.verified_at = datetime.now()
-        if user.role != Role.ADMIN.value:
-            user.role = Role.ORGANIZER.value
+        if user.role != Role.ADMIN.value:  # promote to guide (admins stay admin)
+            user.role = Role.GUIDE.value
         return
 
     user.is_verified = False
@@ -46,8 +48,9 @@ async def submit_verification(
     selfie_bytes: bytes,
 ) -> VerificationSubmitResponse:
     user = _get_user_or_raise(db, user_id)
-    ensure_can_submit(user)
+    ensure_can_submit(user)  # reject early if the user is not in a submittable state
 
+    # The actual face matching lives in verification-service; we only orchestrate.
     try:
         data: dict[str, Any] = await submit(
             user_id=user_id,
@@ -90,7 +93,7 @@ async def submit_verification(
 def get_verification_status(db: Session, user_id: int) -> VerificationStatusResponse:
     user = _get_user_or_raise(db, user_id)
     can_submit, blocked_reason = submit_eligibility(user)
-    can_access_flow, flow_blocked_reason = organizer_flow_eligibility(user)
+    can_access_flow, flow_blocked_reason = guide_flow_eligibility(user)
 
     return VerificationStatusResponse(
         userId=user.id,
@@ -102,8 +105,8 @@ def get_verification_status(db: Session, user_id: int) -> VerificationStatusResp
         metadata=_parse_metadata_json(user.verification_metadata_json),
         canSubmit=can_submit,
         submitBlockedReason=blocked_reason,
-        canAccessOrganizerFlow=can_access_flow,
-        organizerFlowBlockedReason=flow_blocked_reason,
+        canAccessGuideFlow=can_access_flow,
+        guideFlowBlockedReason=flow_blocked_reason,
     )
 
 

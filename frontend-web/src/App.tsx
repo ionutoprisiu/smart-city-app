@@ -5,14 +5,11 @@ import { LoginPage } from '@features/auth/pages/LoginPage';
 import { RegisterPage } from '@features/auth/pages/RegisterPage';
 import { SplashScreen } from '@features/auth/pages/SplashScreen';
 import { VisitCityPage } from '@features/visit-city/pages/VisitCityPage';
-import { ActivitiesHomePage } from '@features/activities/pages/ActivitiesHomePage';
-import { CreateEventPage } from '@features/activities/pages/CreateEventPage';
-import { CreateClubPage } from '@features/activities/pages/CreateClubPage';
-import { ActivityAnnouncementsPage } from '@features/activities/pages/ActivityAnnouncementsPage';
-import { ActivityGroupChatPage } from '@features/activities/pages/ActivityGroupChatPage';
-import { ActivitySupportPage } from '@features/activities/pages/ActivitySupportPage';
+import { ToursPage } from '@features/tours/pages/ToursPage';
+import { CreateTourPage } from '@features/tours/pages/CreateTourPage';
 import { ProfilePage } from '@features/profile/pages/ProfilePage';
 import { VerificationPage } from '@features/verification/pages/VerificationPage';
+import AdminApp from '@features/admin/AdminApp';
 import { MainLayout } from '@app/MainLayout';
 
 export const App: React.FC = () => {
@@ -40,15 +37,26 @@ export const App: React.FC = () => {
     <Routes>
       <Route element={<MainLayout />}>
         <Route path="/visit-city" element={<VisitCityPage />} />
-        <Route path="/community" element={<ActivitiesHomePage />} />
+        <Route path="/tours" element={<ToursPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
-      <Route path="/community/create-event" element={<CreateEventPage />} />
-      <Route path="/community/create-club" element={<CreateClubPage />} />
-      <Route path="/community/:kind/:id/announcements" element={<ActivityAnnouncementsPage />} />
-      <Route path="/community/club/:id/group-chat" element={<ActivityGroupChatPage />} />
-      <Route path="/community/:kind/:id/support" element={<ActivitySupportPage />} />
-      <Route path="/become-organizer" element={<VerificationPage />} />
+      <Route path="/become-guide" element={<VerificationPage />} />
+      <Route
+        path="/tours/create"
+        element={
+          currentUser?.role === 'guide' || currentUser?.role === 'admin' ? (
+            <CreateTourPage />
+          ) : (
+            <Navigate to="/tours" replace />
+          )
+        }
+      />
+      <Route
+        path="/admin/*"
+        element={
+          currentUser?.role === 'admin' ? <AdminApp /> : <Navigate to="/visit-city" replace />
+        }
+      />
       <Route path="*" element={<Navigate to="/visit-city" replace />} />
     </Routes>
   );

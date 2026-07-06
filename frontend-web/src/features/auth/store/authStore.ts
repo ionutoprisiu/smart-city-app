@@ -24,8 +24,8 @@ type AuthState = {
   verificationMetadata: Record<string, unknown> | null;
   verificationCanSubmit: boolean;
   verificationBlockedReason: string | null;
-  canAccessOrganizerFlow: boolean;
-  organizerFlowBlockedReason: string | null;
+  canAccessGuideFlow: boolean;
+  guideFlowBlockedReason: string | null;
 
   initialize: () => Promise<void>;
   login: (request: LoginRequest) => Promise<boolean>;
@@ -49,8 +49,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   verificationMetadata: null,
   verificationCanSubmit: true,
   verificationBlockedReason: null,
-  canAccessOrganizerFlow: true,
-  organizerFlowBlockedReason: null,
+  canAccessGuideFlow: true,
+  guideFlowBlockedReason: null,
 
   async initialize() {
     set({ isInitializing: true });
@@ -150,8 +150,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         verificationMetadata: null,
         verificationCanSubmit: true,
         verificationBlockedReason: null,
-        canAccessOrganizerFlow: true,
-        organizerFlowBlockedReason: null,
+        canAccessGuideFlow: true,
+        guideFlowBlockedReason: null,
       });
       Logger.info('User logged out');
     } catch (e) {
@@ -198,8 +198,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         verificationMetadata: status.metadata,
         verificationCanSubmit: status.canSubmit,
         verificationBlockedReason: status.submitBlockedReason,
-        canAccessOrganizerFlow: status.canAccessOrganizerFlow,
-        organizerFlowBlockedReason: status.organizerFlowBlockedReason,
+        canAccessGuideFlow: status.canAccessGuideFlow,
+        guideFlowBlockedReason: status.guideFlowBlockedReason,
       });
       StorageService.saveUserIsVerified(status.isVerified);
       StorageService.saveUserVerificationStatus(status.status);

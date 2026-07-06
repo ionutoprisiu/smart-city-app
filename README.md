@@ -1,6 +1,6 @@
 # Smart City App
 
-Licență — turism urban în Cluj-Napoca: atracții, traseu optim (ACO + OSRM), verificare CI/selfie, evenimente și chat cu organizatorii. Client web în React (`frontend-web`).
+Licență — turism urban în Cluj-Napoca: atracții, traseu optim (ACO + OSRM), verificare CI/selfie și tururi de la ghizi rezolvate ca problemă Orienteering (selecție + ordonare sub buget de timp). Client web în React (`frontend-web`).
 
 ## Repository Layout
 
@@ -8,10 +8,8 @@ Licență — turism urban în Cluj-Napoca: atracții, traseu optim (ACO + OSRM)
 smart-city-app/
 ├── backend/               # FastAPI API gateway + business logic (port 8080)
 ├── aco-service/           # FastAPI microservice for route optimization (port 8000)
-├── chat-service/          # FastAPI + Socket.IO for activity chat + LLM auto-reply (port 8002)
 ├── verification-service/  # FastAPI microservice for identity verification (port 8090)
-├── frontend-web/          # Vite + React user app (port 8096)
-├── control-web/           # Vite + React control panel (port 8095)
+├── frontend-web/          # Vite + React web app — user + admin panel (port 8096)
 ├── osrm-service/          # OSRM graph data + prepare (see data/)
 └── docker-compose.yml     # Full local stack
 ```
@@ -22,7 +20,7 @@ smart-city-app/
 
 FastAPI, structură pe straturi (`api/`, `services/`, `integrations/`, `db/`, `models/`, `schemas/`).
 
-Expune auth, catalog Visit City (sync Overpass la startup dacă `SYNC_ATTRACTIONS_ON_STARTUP=true`), optimizare traseu (apelează `aco-service`), verificare identitate (`verification-service`), CRUD evenimente/grupuri. Chat-ul live e în `chat-service`, nu aici.
+Expune auth, catalog Visit City (sync Overpass la startup dacă `SYNC_ATTRACTIONS_ON_STARTUP=true`), optimizare traseu (apelează `aco-service`), verificare identitate (`verification-service`) și modulul **tururi** (liste candidate de la ghizi, cu durate de vizitare; la deschidere cu buget de timp → ACO-OP — CRUD local, un singur apel la `aco-service`).
 
 ### ACO Service (`aco-service`)
 
@@ -30,6 +28,7 @@ FastAPI microservice that computes optimized route order:
 
 - builds cost matrix via OSRM `/table`
 - runs Ant Colony Optimization (anchored at start point index 0)
+- **Orienteering mode** (`timeBudgetMinutes`): maximizes collected importance score under a time budget (travel + per-attraction visit durations), reporting the skipped attractions
 - fetches **one multi-waypoint** route via OSRM `/route` (`steps=true`) and splits geometry per leg
 - returns `routeGeometry` (full path) and `routeSegments` (per-leg polylines)
 - falls back to Haversine when OSRM is unavailable
@@ -49,9 +48,9 @@ Layout:
 - `app/vision/` — decode, preprocess, face detection and embedding extraction
 - `app/services/verification_service.py` — orchestration
 
-### Chat Service (`chat-service`)
+### Tururi (modul `tours` din `backend`) — problema Orienteering
 
-Support chat per eveniment/grup: istoric REST, mesaje live Socket.IO. Auto-reply opțional prin Ollama pe Mac (`LLM_MODEL=qwen2.5:7b-instruct`, `LLM_BASE_URL`); dacă modelul nu răspunde, rămân reguli lexicale și fallback din istoric Q&A.
+Ghizii verificați publică tururi — liste **candidate** de atracții din catalog, cu **durata de vizitare** a fiecăreia (`POST /api/tours`, rol `GUIDE`). La deschidere, utilizatorul dă un **buget de timp** („am 2 ore"), iar `POST /api/tours/{id}/optimize` cu `timeBudgetMinutes` rulează **ACO-OP** în `aco-service`: alege subsetul de atracții care maximizează scorul de importanță colectat, cu deplasare + vizite ≤ buget, și întoarce și ce **nu** a încăput (`skippedAttractionIds`, `collectedScore`). Fără buget → comportament clasic (TSP pe toate). Vezi [docs/explicatie-detaliata-microservicii/03-tururi.md](../docs/explicatie-detaliata-microservicii/03-tururi.md).
 
 ### Frontend Web (`frontend-web`)
 
@@ -60,23 +59,20 @@ Vite + React + TypeScript user-facing app:
 - auth flow (login/register/verification gate)
 - visit-city list + filters + Leaflet map + route optimization
 - **map route display**: OSRM road geometry, colored legs, parallel lane offset (see `docs/traseu-si-harta.md`)
-- activities (events/clubs) with support chat toward organizers (Socket.IO)
+- tururi: browse guide-published candidate tours, pick a time budget (1h/2h/…/custom) → ACO-OP builds the itinerary on the map (collected score + skipped stops shown)
 - profile and verification screens (file upload)
 - Zustand stores, shared API client, light theme for presentation
 
-Served on port **8096** in Docker (nginx proxies `/api` → backend).
+The **admin panel** lives inside the same app under `/admin` (feature `src/features/admin/`),
+visible only to `ADMIN` accounts (styles scoped under `.admin-root`):
 
-### Control Web (`control-web`)
-
-Vite + React panel for operators and evaluation:
-
-- login with seeded admin account (`admin@admin.com` / `ADMIN_USER_PASSWORD`)
-- review `MANUAL_REVIEW` / `REJECTED` verifications; view auto-approved (`APPROVED`) cases
-- **Users**: edit (name, email, role), delete, promote/demote, reset verification
+- **Verifications** — review `MANUAL_REVIEW` / `REJECTED`; view auto-approved (`APPROVED`) cases
+- **Users** — edit (name, email, role), delete, promote/demote, reset verification
 - **Algorithms** — ACO/PSO benchmark lab (proxies `/research` → `aco-service`)
-- served on port **8095** (nginx proxies `/api` → backend, `/research` → aco-service)
 
-See [docs/control-panel.md](../docs/control-panel.md).
+Served on port **8096** in Docker (nginx proxies `/api` → backend and `/research` → aco-service).
+Sign in with the seeded admin account (`ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD`) and open the
+**Admin** tab. See [docs/control-panel.md](../docs/control-panel.md).
 
 ## API Overview
 
@@ -87,6 +83,9 @@ See [docs/control-panel.md](../docs/control-panel.md).
 - `GET /api/visit-city/attractions`
 - `GET /api/visit-city/attractions/live`
 - `POST /api/visit-city/optimize`
+- `GET /api/tours`
+- `POST /api/tours` (guide JWT)
+- `POST /api/tours/{tour_id}/optimize` (optional body: `{"timeBudgetMinutes": 120}` → Orienteering)
 - `POST /api/verification/submit`
 - `GET /api/verification/status/{user_id}`
 - `GET /api/admin/verifications/pending` (admin JWT)
@@ -95,23 +94,15 @@ See [docs/control-panel.md](../docs/control-panel.md).
 - `GET /api/admin/users` (admin JWT)
 - `PATCH /api/admin/users/{user_id}` (admin JWT)
 - `DELETE /api/admin/users/{user_id}` (admin JWT)
-- `POST /api/admin/users/{user_id}/promote-organizer` (admin JWT)
+- `POST /api/admin/users/{user_id}/promote-guide` (admin JWT)
 - `POST /api/admin/users/{user_id}/demote-user` (admin JWT)
 - `POST /api/admin/users/{user_id}/reset-verification` (admin JWT)
 - `GET /health`
 
-### Chat Service (8002)
-
-- `GET /api/v1/events/{eventId}/messages` — chat history (JWT)
-- `GET /api/v1/clubs/{clubId}/messages` — chat history (JWT)
-- Socket.IO: `chat_join`, `chat_leave`, `chat_send` → `chat:message` (JWT in connect `auth.token`)
-- auto-reply: întâi caută răspunsuri manuale similare din același eveniment/grup; dacă nu găsește, extrage din descriere + anunțuri
-- `GET /health`
-
 ### ACO Service (8000)
 
-- `POST /optimize`
-- `GET /research/sets` — benchmark catalog (used by control-web)
+- `POST /optimize` (TSP; with `timeBudgetMinutes` + per-attraction `score`/`visitDurationMinutes` → Orienteering)
+- `GET /research/sets` — benchmark catalog (used by the admin Algorithms tab)
 - `POST /research/compare` — offline algorithm comparison
 - `GET /health`
 
@@ -152,38 +143,35 @@ docker compose --profile osrm-prepare up osrm-prepare-foot osrm-prepare-driving
 ```bash
 curl http://localhost:8080/health
 curl http://localhost:8000/health
-curl http://localhost:8002/health
 curl http://localhost:8090/health
-curl http://localhost:8095/
 curl http://localhost:8096/
 ```
 
-User app: open `http://localhost:8096`. Control panel: open `http://localhost:8095` and sign in with the seeded admin credentials from `.env` (`ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD`).
+Open `http://localhost:8096`. Regular users get Visit City / Tururi / Profile; signing in with the
+seeded admin account (`ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD`) also reveals the **Admin** tab
+(Verifications / Users / Algorithms) at `/admin`.
 
-Local dev (hot reload, proxies API to backend on 8080):
+Local dev (hot reload, proxies `/api` → backend on 8080 and `/research` → aco-service on 8000):
 
 ```bash
 cd frontend-web && npm install && npm run dev
-# or
-cd control-web && npm install && npm run dev
 ```
 
 ## Teste
 
-În `frontend-web/` și `control-web/`:
+În `frontend-web/`:
 
 ```bash
 npm run build
 npm run typecheck
 ```
 
-Backend / chat (pytest inside Docker, same images as compose):
+Backend (pytest inside Docker, same images as compose):
 
 ```bash
-docker compose build backend chat-service
-docker compose up -d backend chat-service
+docker compose build backend
+docker compose up -d backend
 docker exec smart-city-backend pytest tests/ -q
-docker exec smart-city-chat python -m pytest tests/ -q
 ```
 
 ## Documentație suplimentară
@@ -191,7 +179,7 @@ docker exec smart-city-chat python -m pytest tests/ -q
 | Document | Conținut |
 |----------|----------|
 | [docs/traseu-si-harta.md](../docs/traseu-si-harta.md) | OSRM, geometrie traseu, vizualizare Leaflet |
-| [docs/control-panel.md](../docs/control-panel.md) | Control Panel, API admin, Algorithms |
+| [docs/control-panel.md](../docs/control-panel.md) | Zona de administrare (`/admin`), API admin, Algorithms |
 | [osrm-service/README.md](osrm-service/README.md) | Pregătire graf OSRM |
 
 ## Note

@@ -1,3 +1,4 @@
+"""Greedy nearest-neighbour heuristic: the fast, low-quality baseline for ACO."""
 from __future__ import annotations
 
 from app.common.distance import calculate_route_cost
@@ -15,7 +16,7 @@ def nearest_neighbor(cost_matrix: list[list[float]]) -> tuple[list[int], float]:
 
     while unvisited:
         current = route[-1]
-        nxt = min(unvisited, key=lambda j: cost_matrix[current][j])
+        nxt = min(unvisited, key=lambda j: cost_matrix[current][j])  # always hop to the cheapest next
         route.append(nxt)
         unvisited.discard(nxt)
 

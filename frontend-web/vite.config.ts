@@ -18,6 +18,10 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true,
       },
+      "/research": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
     },
   },
 });

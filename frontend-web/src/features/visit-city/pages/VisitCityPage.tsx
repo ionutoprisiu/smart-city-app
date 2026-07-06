@@ -5,8 +5,6 @@ import { Icon } from '@shared/components/Icon';
 import { Spinner } from '@shared/components/Spinner';
 import { AttractionCard } from '../components/AttractionCard';
 import { AttractionDetailsSheet } from '../components/AttractionDetailsSheet';
-import { RouteInfoCard } from '../components/RouteInfoCard';
-import { RouteStartBar } from '../components/RouteStartBar';
 import { SelectionDock } from '../components/SelectionDock';
 import { useVisitCityStore } from '../store/visitCityStore';
 import {
@@ -70,7 +68,6 @@ export const VisitCityPage: React.FC = () => {
     optimizeRoute,
     clearSelection,
     clearRoute,
-    startRoute,
   } = useVisitCityStore();
 
   const [showMap, setShowMap] = useState(false);
@@ -88,6 +85,15 @@ export const VisitCityPage: React.FC = () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
   }, [loadAttractions]);
+
+  // Arriving with a route already computed (e.g. a tour was just opened):
+  // jump straight to the map — that is where the route lives.
+  useEffect(() => {
+    if (useVisitCityStore.getState().routeResult != null) {
+      setShowMap(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredAttractions = useMemo(() => {
     const next = attractions.filter((a) => matchesQuickFilter(a, quickFilter, selectedIds));
@@ -165,8 +171,8 @@ export const VisitCityPage: React.FC = () => {
       <div style={{ minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <EmptyState
           iconName="travel-explore"
-          title="Nothing here yet"
-          subtitle="Try another search, change category, or clear filters."
+          title="Nimic aici încă"
+          subtitle="Încearcă altă căutare, schimbă categoria sau șterge filtrele."
         />
       </div>
     );
@@ -194,27 +200,27 @@ export const VisitCityPage: React.FC = () => {
         }}
       >
         <div style={{ width: 48 }} />
-        <div className="title-medium">{showMap ? 'Map' : ''}</div>
-        <button
-          type="button"
-          className="icon-button"
-          onClick={() => setShowMap((v) => !v)}
-          title={showMap ? 'Show list' : 'Show map'}
-          style={
-            showMap
-              ? undefined
-              : {
-                  background: 'var(--surface-container-highest)',
-                  boxShadow: 'var(--shadow-2)',
-                  width: 44,
-                  height: 44,
-                  marginTop: 10,
-                  marginRight: 8,
-                }
-          }
-        >
-          <Icon name={showMap ? 'view-list' : 'map'} size={22} color="var(--primary)" />
-        </button>
+        <div className="title-medium">{showMap ? 'Hartă' : ''}</div>
+        {showMap ? (
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => setShowMap(false)}
+            title="Înapoi la listă"
+          >
+            <Icon name="view-list" size={22} color="var(--primary)" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="map-toggle-pill"
+            onClick={() => setShowMap(true)}
+            style={{ marginTop: 12, marginRight: 10 }}
+          >
+            <Icon name="map" size={17} color="var(--primary)" />
+            Hartă
+          </button>
+        )}
       </div>
 
       {showMap ? (
@@ -224,7 +230,7 @@ export const VisitCityPage: React.FC = () => {
           <div
             ref={listRef}
             onScroll={onListScroll}
-            style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 220 }}
+            style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 120 }}
           >
             <div className="vc-hero">
               <div style={{ maxWidth: 760, margin: '0 auto' }}>
@@ -233,17 +239,17 @@ export const VisitCityPage: React.FC = () => {
                   Cluj-Napoca · Romania
                 </span>
                 <div className="headline-large" style={{ marginTop: 8 }}>
-                  Explore the city
+                  Explorează orașul
                 </div>
                 <div
                   className="body-medium"
                   style={{ color: 'var(--on-surface-variant)', marginTop: 6, lineHeight: '22px' }}
                 >
-                  {filteredAttractions.length} places
+                  {filteredAttractions.length} locuri
                   {attractions.length > 0 && filteredAttractions.length !== attractions.length
-                    ? ` of ${attractions.length}`
+                    ? ` din ${attractions.length}`
                     : ''}{' '}
-                  — select stops, then optimize your route.
+                  — alege opririle, apoi optimizează traseul.
                 </div>
 
                 <form
@@ -269,7 +275,7 @@ export const VisitCityPage: React.FC = () => {
                   <input
                     value={searchInput}
                     onChange={(e) => onSearchChange(e.target.value)}
-                    placeholder="Search museums, parks, cafés…"
+                    placeholder="Caută muzee, parcuri, cafenele…"
                   />
                   {searchInput.length > 0 ? (
                     <button type="button" className="icon-button" onClick={onSearchClear} style={{ width: 38, height: 38 }}>
@@ -281,22 +287,22 @@ export const VisitCityPage: React.FC = () => {
                 <div className="vc-filters">
                   <div className="vc-filters-head">
                     <span className="vc-filters-label" style={{ marginBottom: 0 }}>
-                      Filters
+                      Filtre
                     </span>
                     {hasActiveFilters ? (
                       <button type="button" className="vc-clear-filters" onClick={onSearchClear}>
                         <Icon name="filter-alt-off" size={14} />
-                        Clear
+                        Șterge
                       </button>
                     ) : null}
                   </div>
                   <div className="chip-row">
                     {(
                       [
-                        { id: 'all', label: 'All', icon: 'apps' },
+                        { id: 'all', label: 'Toate', icon: 'apps' },
                         {
                           id: 'selected',
-                          label: `Selected (${selectedCount()})`,
+                          label: `Selectate (${selectedCount()})`,
                           icon: 'check-circle-outline',
                         },
                       ] as { id: QuickFilter; label: string; icon: string }[]
@@ -387,9 +393,37 @@ export const VisitCityPage: React.FC = () => {
             }}
           >
             <div style={{ pointerEvents: 'auto', display: 'contents' }}>
+              {/* In list mode a computed route is summarized in ONE compact
+                  pill — the full glass card + start bar live on the map,
+                  where they do not cover the attraction list. */}
               {routeResult != null && !routeStarted ? (
-                <div style={{ pointerEvents: 'auto' }}>
-                  <RouteInfoCard result={routeResult} />
+                <div className="route-pill rise-in" style={{ pointerEvents: 'auto' }}>
+                  <div className="rp-stats">
+                    <span className="rp-title">
+                      <Icon name="auto-awesome" size={13} />
+                      Traseu optimizat
+                    </span>
+                    <span className="rp-meta">
+                      {routeResult.totalDistance.toFixed(1)} km
+                      <span className="sep">·</span>
+                      {Math.floor(routeResult.totalTime / 60) > 0
+                        ? `${Math.floor(routeResult.totalTime / 60)}h ${routeResult.totalTime % 60}m`
+                        : `${routeResult.totalTime}m`}
+                      {routeResult.timeBudgetMinutes != null ? (
+                        <>
+                          <span className="sep">·</span>
+                          {routeResult.steps.length - 1} obiective în buget
+                        </>
+                      ) : null}
+                    </span>
+                  </div>
+                  <button type="button" className="rp-modify" onClick={clearRoute}>
+                    Modifică
+                  </button>
+                  <button type="button" className="rp-map" onClick={() => setShowMap(true)}>
+                    <Icon name="map" size={16} color="var(--on-primary)" />
+                    Vezi pe hartă
+                  </button>
                 </div>
               ) : null}
 
@@ -404,12 +438,6 @@ export const VisitCityPage: React.FC = () => {
                     onOptimize={canOptimize() ? onOptimizeFromList : undefined}
                     onClear={clearSelection}
                   />
-                </div>
-              ) : null}
-
-              {routeResult != null && !routeStarted ? (
-                <div style={{ pointerEvents: 'auto' }}>
-                  <RouteStartBar onStart={startRoute} onModify={clearRoute} />
                 </div>
               ) : null}
             </div>

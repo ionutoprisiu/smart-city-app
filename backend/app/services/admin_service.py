@@ -2,16 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.activity_announcement import ActivityAnnouncement
-from app.models.activity_chat_message import ActivityChatMessage
-from app.models.activity_event import ActivityEvent
-from app.models.club import Club
-from app.models.event_participation import EventParticipation
-from app.models.club_membership import ClubMembership
 from app.models.enums import Role, VerificationStatus
+from app.models.tour import Tour, TourAttraction
 from app.models.user import User
 from app.schemas.admin import (
     AdminUserItem,
@@ -21,8 +16,8 @@ from app.schemas.admin import (
     AdminVerificationListResponse,
 )
 from app.services import verification_storage
-from app.services.activities_service import _purge_club_data, _purge_event_data
 
+# Statuses an admin may act on vs. statuses shown in the moderation inbox.
 _REVIEWABLE = frozenset(
     {
         VerificationStatus.MANUAL_REVIEW.value,
@@ -68,7 +63,7 @@ def approve_verification(db: Session, user_id: int) -> AdminVerificationItem:
     user.verified_at = now
     user.verification_reason = "Approved by admin"
     if user.role != Role.ADMIN.value:
-        user.role = Role.ORGANIZER.value
+        user.role = Role.GUIDE.value
     db.commit()
     db.refresh(user)
     return _verification_item(user)
@@ -87,8 +82,8 @@ def reject_verification(db: Session, user_id: int, reason: str | None) -> AdminV
 
 def allow_resubmit(db: Session, user_id: int) -> AdminVerificationItem:
     user = _get_user_or_raise(db, user_id)
-    if user.role in (Role.ADMIN.value, Role.ORGANIZER.value):
-        raise ValueError("Organizers cannot resubmit verification")
+    if user.role in (Role.ADMIN.value, Role.GUIDE.value):
+        raise ValueError("Guides cannot resubmit verification")
     if user.verification_status != VerificationStatus.REJECTED.value:
         raise ValueError("Only rejected verifications can be reopened for resubmission")
     user.verification_status = VerificationStatus.NOT_SUBMITTED.value
@@ -115,13 +110,13 @@ def list_users(db: Session, *, limit: int = 200) -> AdminUserListResponse:
     return AdminUserListResponse(items=items)
 
 
-def promote_to_organizer(db: Session, user_id: int) -> AdminUserItem:
+def promote_to_guide(db: Session, user_id: int) -> AdminUserItem:
     user = _get_user_or_raise(db, user_id)
     if user.role == Role.ADMIN.value:
         raise ValueError("Cannot change role for admin user")
     if user.verification_status != VerificationStatus.APPROVED.value or not user.is_verified:
-        raise ValueError("User must complete identity verification before becoming organizer")
-    user.role = Role.ORGANIZER.value
+        raise ValueError("User must complete identity verification before becoming guide")
+    user.role = Role.GUIDE.value
     db.commit()
     db.refresh(user)
     return _user_item(user)
@@ -131,12 +126,13 @@ def demote_to_user(db: Session, user_id: int) -> AdminUserItem:
     user = _get_user_or_raise(db, user_id)
     if user.role == Role.ADMIN.value:
         raise ValueError("Cannot change role for admin user")
-    if user.role != Role.ORGANIZER.value:
-        raise ValueError("Only organizers can be demoted to a regular user")
+    if user.role != Role.GUIDE.value:
+        raise ValueError("Only guides can be demoted to a regular user")
     user.role = Role.USER.value
+    # Losing the guide role also resets verification, so it must be re-earned.
     _clear_verification_state(
         user,
-        reason="Organizer role removed; identity verification required again",
+        reason="Guide role removed; identity verification required again",
     )
     db.commit()
     db.refresh(user)
@@ -147,8 +143,8 @@ def reset_user_verification(db: Session, user_id: int) -> AdminUserItem:
     user = _get_user_or_raise(db, user_id)
     if user.role == Role.ADMIN.value:
         raise ValueError("Cannot reset verification for admin user")
-    if user.role == Role.ORGANIZER.value:
-        raise ValueError("Demote organizer to user before resetting verification")
+    if user.role == Role.GUIDE.value:
+        raise ValueError("Demote guide to user before resetting verification")
     if user.verification_status == VerificationStatus.NOT_SUBMITTED.value and not user.is_verified:
         raise ValueError("User verification is already reset")
     _clear_verification_state(
@@ -167,6 +163,7 @@ def update_user(
     actor_admin_id: int,
 ) -> AdminUserItem:
     user = _get_user_or_raise(db, user_id)
+    # Self-protection: an admin can't change their own role and lock themselves out.
     if body.role is not None and user.id == actor_admin_id:
         raise ValueError("Cannot change your own role")
     if body.email is not None:
@@ -190,15 +187,15 @@ def update_user(
             raise ValueError("Cannot change admin role")
         if body.role == Role.ADMIN:
             raise ValueError("Cannot promote to admin")
-        if body.role == Role.ORGANIZER:
+        if body.role == Role.GUIDE:
             if user.verification_status != VerificationStatus.APPROVED.value or not user.is_verified:
-                raise ValueError("User must be verified before becoming organizer")
-            user.role = Role.ORGANIZER.value
+                raise ValueError("User must be verified before becoming guide")
+            user.role = Role.GUIDE.value
         elif body.role == Role.USER:
-            if user.role == Role.ORGANIZER.value:
+            if user.role == Role.GUIDE.value:
                 _clear_verification_state(
                     user,
-                    reason="Organizer role removed; identity verification required again",
+                    reason="Guide role removed; identity verification required again",
                 )
             user.role = Role.USER.value
     db.commit()
@@ -212,51 +209,21 @@ def delete_user(db: Session, user_id: int, actor_admin_id: int) -> None:
         raise ValueError("Cannot delete your own account")
     if user.role == Role.ADMIN.value:
         raise ValueError("Cannot delete admin user")
-    _purge_user_associations(db, user_id)
-    verification_storage.delete_user_files(user_id)
+    _purge_user_associations(db, user_id)          # remove everything the user owns/created
+    verification_storage.delete_user_files(user_id)  # and their uploaded ID/selfie files
     db.delete(user)
     db.commit()
 
 
 def _purge_user_associations(db: Session, user_id: int) -> None:
-    events = db.execute(
-        select(ActivityEvent).where(ActivityEvent.created_by == user_id)
+    # Hard delete: user rows have no soft-delete, so the tours a guide created (and
+    # their attraction links) must be removed before the user row can go.
+    tour_ids = db.execute(
+        select(Tour.id).where(Tour.created_by == user_id)
     ).scalars().all()
-    for event in events:
-        _purge_event_data(db, event.id)
-        db.delete(event)
-
-    clubs = db.execute(select(Club).where(Club.created_by == user_id)).scalars().all()
-    for club in clubs:
-        _purge_club_data(db, club.id)
-        db.delete(club)
-
-    db.execute(delete(ActivityAnnouncement).where(ActivityAnnouncement.created_by == user_id))
-
-    message_ids = db.execute(
-        select(ActivityChatMessage.id).where(
-            or_(
-                ActivityChatMessage.sender_user_id == user_id,
-                ActivityChatMessage.thread_user_id == user_id,
-            )
-        )
-    ).scalars().all()
-    if message_ids:
-        db.execute(
-            update(ActivityChatMessage)
-            .where(ActivityChatMessage.in_reply_to_message_id.in_(message_ids))
-            .values(in_reply_to_message_id=None)
-        )
-    db.execute(
-        delete(ActivityChatMessage).where(
-            or_(
-                ActivityChatMessage.sender_user_id == user_id,
-                ActivityChatMessage.thread_user_id == user_id,
-            )
-        )
-    )
-    db.execute(delete(ClubMembership).where(ClubMembership.user_id == user_id))
-    db.execute(delete(EventParticipation).where(EventParticipation.user_id == user_id))
+    if tour_ids:
+        db.execute(delete(TourAttraction).where(TourAttraction.tour_id.in_(tour_ids)))
+        db.execute(delete(Tour).where(Tour.id.in_(tour_ids)))
 
 
 def _clear_verification_state(user: User, *, reason: str) -> None:

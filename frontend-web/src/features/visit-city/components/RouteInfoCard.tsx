@@ -58,7 +58,7 @@ export const RouteInfoCard: React.FC<Props> = ({ result, layout = 'floating' }) 
           className="label-small"
           style={{ color: 'var(--primary-strong)', letterSpacing: 1, textTransform: 'uppercase' }}
         >
-          Optimized route
+          Traseu optimizat
         </span>
         {result.usedOsrm ? (
           <span
@@ -75,7 +75,7 @@ export const RouteInfoCard: React.FC<Props> = ({ result, layout = 'floating' }) 
               name={result.routingProfile === 'foot' ? 'directions-walk' : 'directions-car'}
               size={14}
             />
-            {result.routingProfile === 'foot' ? 'Walking' : 'Driving'} · OSRM
+            {result.routingProfile === 'foot' ? 'Pe jos' : 'Cu mașina'} · OSRM
           </span>
         ) : null}
       </div>
@@ -90,9 +90,36 @@ export const RouteInfoCard: React.FC<Props> = ({ result, layout = 'floating' }) 
       </div>
 
       <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'wrap' }}>
-        <Stat icon="schedule" label="Travel" value={travelStr} />
-        <Stat icon="timer" label="Total ETA" value={totalStr} />
+        <Stat icon="schedule" label="Deplasare" value={travelStr} />
+        {result.visitTimeMinutes > 0 ? (
+          <Stat icon="museum" label="Vizite" value={fmt(result.visitTimeMinutes)} />
+        ) : null}
+        <Stat icon="timer" label="Total" value={totalStr} />
       </div>
+
+      {result.timeBudgetMinutes != null ? (
+        <div className="op-result">
+          <div className="op-row">
+            <Icon name="auto-awesome" size={14} color="var(--primary-strong)" />
+            <span>
+              Itinerariu în buget de <b>{fmt(result.timeBudgetMinutes)}</b>
+            </span>
+          </div>
+          <div className="op-row">
+            <Icon name="stars" size={14} color="var(--primary-strong)" />
+            <span>
+              Scor colectat: <b>{result.collectedScore?.toFixed(1) ?? '—'}</b>
+              {result.skippedAttractionIds.length > 0 ? (
+                <span className="muted">
+                  {' '}· {result.skippedAttractionIds.length} obiective nu au încăput
+                </span>
+              ) : (
+                <span className="muted"> · toate obiectivele incluse</span>
+              )}
+            </span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

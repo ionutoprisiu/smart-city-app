@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import models  # noqa: F401
 from app.api.errors import register_exception_handlers
-from app.api.routes import activities, admin, auth, verification, visit_city
+from app.api.routes import admin, auth, tours, verification, visit_city
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db import Base, engine
@@ -26,13 +26,16 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Runs once at startup: prepare the DB schema and seed baseline data before
+    # the app starts serving requests.
     settings.verification_upload_dir_path.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
-    apply_non_destructive_updates(engine)
+    apply_non_destructive_updates(engine)  # add missing columns without dropping data
     db = SessionLocal()
     try:
         seed_admin_user_if_enabled(db)
         seed_core_attractions_if_empty(db)
+        # Best-effort OSM sync; a failure must not stop the service from booting.
         if settings.sync_attractions_on_startup:
             try:
                 stats = visit_city_service.sync_attractions(db)
@@ -60,7 +63,7 @@ app = FastAPI(
         {"name": "auth"},
         {"name": "visit-city"},
         {"name": "verification"},
-        {"name": "activities"},
+        {"name": "tours"},
         {"name": "admin"},
     ],
 )
@@ -78,7 +81,7 @@ register_exception_handlers(app)
 app.include_router(auth.router, prefix="/api")
 app.include_router(visit_city.router, prefix="/api")
 app.include_router(verification.router, prefix="/api")
-app.include_router(activities.router, prefix="/api")
+app.include_router(tours.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 
 

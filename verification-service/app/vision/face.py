@@ -1,3 +1,9 @@
+"""Face detection and embedding extraction with InsightFace.
+
+Given an image, it detects faces at several scales, picks the best one, and
+returns a normalized ArcFace embedding plus a quality measurement. The ID card and
+the selfie use slightly different strategies (see extract_id_portrait / _selfie).
+"""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -15,11 +21,13 @@ from app.vision.image_utils import BGRImage, blur_variance, enhance_for_detectio
 Face = Any
 FacePair = tuple[Face, BGRImage]
 
+# On an ID card the portrait sits on the left half; faces past this x are ignored.
 PORTRAIT_MAX_CENTER_X = 0.55
 
 
 @lru_cache(maxsize=4)
 def _analysis_app(det_size: int) -> FaceAnalysis:
+    # The model is heavy to load, so cache one instance per detection size and reuse it.
     app = FaceAnalysis(name=settings.insightface_model_name, providers=["CPUExecutionProvider"])
     app.prepare(
         ctx_id=0,
@@ -30,10 +38,13 @@ def _analysis_app(det_size: int) -> FaceAnalysis:
 
 
 def warm_up() -> None:
+    # Called at startup so the first real /verify doesn't pay the model-load cost.
     _analysis_app(settings.insightface_det_size)
 
 
 def _det_sizes() -> list[int]:
+    # Try several detector resolutions (dedup, order preserved) — small faces on an
+    # ID photo often need a larger det_size to be found.
     return list(dict.fromkeys([640, settings.insightface_det_size, 1280]))
 
 
@@ -53,6 +64,7 @@ def _face_center_x(face: Face, image_width: int) -> float:
 
 
 def _normalize_embedding(face: Face) -> NDArray[np.float32]:
+    # L2-normalize to a unit vector so a later dot product equals cosine similarity.
     embedding = np.asarray(face.embedding, dtype=np.float32)
     norm = np.linalg.norm(embedding)
     if norm == 0:
@@ -64,10 +76,13 @@ def pick_best_face(pairs: list[tuple[Face, int]], *, portrait_only: bool) -> Fac
     if not pairs:
         raise ValidationAppError("No face detected")
 
+    # Prefer confidently-detected faces, but keep the rest as a fallback.
     min_score = settings.insightface_min_det_score
     confident = [pair for pair in pairs if _det_score(pair[0]) >= min_score]
     candidates = confident or list(pairs)
 
+    # For an ID card, keep only faces on the left (the portrait), dropping any face
+    # that might appear elsewhere on the document.
     if portrait_only:
         portrait = [
             pair for pair in candidates if _face_center_x(pair[0], pair[1]) <= PORTRAIT_MAX_CENTER_X
@@ -75,6 +90,7 @@ def pick_best_face(pairs: list[tuple[Face, int]], *, portrait_only: bool) -> Fac
         if portrait:
             candidates = portrait
 
+    # Among the survivors, take the most confident and, on ties, the largest face.
     return max(candidates, key=lambda pair: (_det_score(pair[0]), _face_area(pair[0])))[0]
 
 
@@ -89,6 +105,8 @@ def _face_quality(face: Face, probe: BGRImage) -> FaceQuality:
 
 
 def _detect_faces(probes: list[BGRImage]) -> list[FacePair]:
+    # Run the detector at increasing scales and stop at the first scale that yields
+    # confident faces; if none is ever confident, return whatever was found.
     min_score = settings.insightface_min_det_score
     fallback: list[FacePair] = []
 
@@ -122,6 +140,8 @@ def _extract(probes: list[BGRImage], *, portrait_only: bool, error: str) -> tupl
 
 
 def _id_probes(image: BGRImage) -> list[BGRImage]:
+    # The ID portrait is small and sits top-left; crop that region (two ratios) and
+    # upscale it, so the detector sees a bigger, clearer face to work with.
     enhanced = enhance_for_detection(image)
     h, w = enhanced.shape[:2]
     regions = (
@@ -136,6 +156,8 @@ def _id_probes(image: BGRImage) -> list[BGRImage]:
 
 
 def extract_id_portrait(image: BGRImage) -> tuple[NDArray[np.float32], FaceQuality]:
+    # Try the cropped portrait regions first; if that finds nothing, fall back to
+    # the whole card. portrait_only keeps only the left-side face either way.
     probes = _id_probes(image)
     try:
         return _extract(probes, portrait_only=True, error="No face detected in id card image")
@@ -149,6 +171,8 @@ def extract_id_portrait(image: BGRImage) -> tuple[NDArray[np.float32], FaceQuali
 
 
 def extract_selfie(image: BGRImage) -> tuple[NDArray[np.float32], FaceQuality]:
+    # A selfie is one face filling the frame — detect on the whole image (plus a
+    # contrast-enhanced and an upscaled variant to help hard cases).
     enhanced = enhance_for_detection(image)
     return _extract(
         [image, enhanced, resize(enhanced, 1.5)],

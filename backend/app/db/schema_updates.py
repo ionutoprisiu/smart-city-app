@@ -18,23 +18,31 @@ def apply_non_destructive_updates(engine: Engine) -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_metadata_json VARCHAR(4000)",
         # drop redundant denormalized full name (derivable from first_name + last_name)
         "ALTER TABLE users DROP COLUMN IF EXISTS name",
-        # role check: add ORGANIZER
+        # Drop the old check FIRST, then migrate ORGANIZER -> GUIDE, then re-add the
+        # new check. Migrating before dropping would violate the old constraint.
         "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
+        "UPDATE users SET role = 'GUIDE' WHERE role = 'ORGANIZER'",
         (
             "ALTER TABLE users ADD CONSTRAINT users_role_check "
-            "CHECK (role IN ('USER', 'ORGANIZER', 'ADMIN'))"
+            "CHECK (role IN ('USER', 'GUIDE', 'ADMIN'))"
         ),
         (
             "ALTER TABLE tourist_attractions "
             "ADD COLUMN IF NOT EXISTS importance_score DOUBLE PRECISION DEFAULT 0 NOT NULL"
         ),
-        "DROP TABLE IF EXISTS user_preferences",
-        # support thread owner
-        "ALTER TABLE activity_chat_messages ADD COLUMN IF NOT EXISTS thread_user_id INTEGER",
+        # per-attraction visit duration set by the guide (orienteering budget input)
         (
-            "ALTER TABLE activity_chat_messages "
-            "ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE NOT NULL"
+            "ALTER TABLE tour_attractions "
+            "ADD COLUMN IF NOT EXISTS visit_duration_minutes DOUBLE PRECISION DEFAULT 15 NOT NULL"
         ),
+        # drop tables left over from the removed Community/chat modules
+        "DROP TABLE IF EXISTS activity_chat_messages",
+        "DROP TABLE IF EXISTS activity_announcements",
+        "DROP TABLE IF EXISTS club_memberships",
+        "DROP TABLE IF EXISTS event_participations",
+        "DROP TABLE IF EXISTS activity_events",
+        "DROP TABLE IF EXISTS clubs",
+        "DROP TABLE IF EXISTS user_preferences",
     ]
     with engine.begin() as conn:
         for statement in statements:

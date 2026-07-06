@@ -1,3 +1,10 @@
+"""Particle Swarm Optimization for the TSP via random-key encoding.
+
+PSO works on continuous vectors, so each attraction gets a continuous "key" in
+[0,1]; sorting the keys yields a permutation. This turns the discrete TSP into a
+continuous problem the swarm can optimize. Used only as a secondary, uncalibrated
+baseline against ACO.
+"""
 from __future__ import annotations
 
 import logging
@@ -9,15 +16,16 @@ log = logging.getLogger(__name__)
 
 SWARM_SIZE = 30
 MAX_ITERATIONS = 200
-INERTIA = 0.7
-COGNITIVE = 1.5
-SOCIAL = 1.5
+INERTIA = 0.7      # how much of the previous velocity a particle keeps
+COGNITIVE = 1.5    # pull toward the particle's own best position
+SOCIAL = 1.5       # pull toward the swarm's global best position
 EARLY_STOPPING_THRESHOLD = 50
 KEY_MIN = 0.0
 KEY_MAX = 1.0
 
 
 def _decode(keys: list[float], num_points: int) -> list[int]:
+    # Sort attractions by their continuous key -> a tour permutation anchored at 0.
     cities = list(range(1, num_points))
     cities.sort(key=lambda c: keys[c - 1])
     return [0, *cities]
@@ -66,9 +74,11 @@ class PSOOptimizer:
         return calculate_route_cost(_decode(keys, self.num_points), self.cost_matrix)
 
     def optimize(self) -> tuple[list[int], float]:
+        # Each particle is a vector of random keys; velocity starts at zero.
         positions = [[self._rng.random() for _ in range(self.dim)] for _ in range(self.swarm_size)]
         velocities = [[0.0] * self.dim for _ in range(self.swarm_size)]
 
+        # pbest = best each particle has seen; gbest (below) = best across the swarm.
         pbest_pos = [p[:] for p in positions]
         pbest_cost = [self._cost(p) for p in positions]
 
@@ -87,12 +97,13 @@ class PSOOptimizer:
                 r1 = self._rng.random()
                 r2 = self._rng.random()
                 for d in range(self.dim):
+                    # Standard PSO velocity: inertia + pull to personal best + pull to global best.
                     velocities[i][d] = (
                         self.inertia * velocities[i][d]
                         + self.cognitive * r1 * (pbest_pos[i][d] - positions[i][d])
                         + self.social * r2 * (gbest_pos[d] - positions[i][d])
                     )
-                    positions[i][d] = _clamp(positions[i][d] + velocities[i][d])
+                    positions[i][d] = _clamp(positions[i][d] + velocities[i][d])  # keep keys in [0,1]
 
                 cost = self._cost(positions[i])
                 if cost < pbest_cost[i]:

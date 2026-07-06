@@ -38,32 +38,32 @@ export const categoryFromString = (value?: string | null): AttractionCategory =>
 export const categoryLabel = (category: AttractionCategory): string => {
   switch (category) {
     case 'museum':
-      return 'Museum';
+      return 'Muzeu';
     case 'church':
-      return 'Church';
+      return 'Biserică';
     case 'square':
-      return 'Square';
+      return 'Piață';
     case 'monument':
       return 'Monument';
     case 'fortress':
-      return 'Fortress';
+      return 'Cetate';
     case 'park':
-      return 'Park';
+      return 'Parc';
     case 'restaurant':
       return 'Restaurant';
     case 'cafe':
-      return 'Cafe';
+      return 'Cafenea';
     case 'shop':
-      return 'Shop';
+      return 'Magazin';
     case 'theater':
-      return 'Theater';
+      return 'Teatru';
     case 'library':
-      return 'Library';
+      return 'Bibliotecă';
     case 'hotel':
       return 'Hotel';
     case 'other':
     default:
-      return 'Other';
+      return 'Altele';
   }
 };
 
@@ -137,6 +137,7 @@ export type RouteStep = {
   latitude: number;
   longitude: number;
   distanceToNext: number | null;
+  estimatedVisitTime: number | null;
 };
 
 export type RoutingProfile = 'driving' | 'foot';
@@ -146,10 +147,16 @@ export type RouteResult = {
   totalDistance: number;
   totalTime: number;
   travelTimeMinutes: number;
+  visitTimeMinutes: number;
   routeGeometry: LatLonPoint[];
   routeSegments: LatLonPoint[][];
   usedOsrm: boolean;
   routingProfile: RoutingProfile;
+  // Orienteering extras: present only when the route was optimized under a
+  // time budget (opening a tour with "how much time do you have?").
+  collectedScore: number | null;
+  skippedAttractionIds: number[];
+  timeBudgetMinutes: number | null;
 };
 
 const parsePoints = (points: any[]): LatLonPoint[] =>
@@ -166,6 +173,8 @@ export const routeStepFromJson = (json: any): RouteStep => ({
   longitude: Number(json?.longitude ?? 0),
   distanceToNext:
     typeof json?.distanceToNext === 'number' ? json.distanceToNext : null,
+  estimatedVisitTime:
+    typeof json?.estimatedVisitTime === 'number' ? json.estimatedVisitTime : null,
 });
 
 const asInt = (v: unknown, fallback = 0): number => {
@@ -193,11 +202,19 @@ export const routeResultFromJson = (json: any): RouteResult => {
     totalDistance: Number(json?.totalDistance ?? 0),
     totalTime: totalT,
     travelTimeMinutes: travelT,
+    visitTimeMinutes: asInt(json?.visitTimeMinutes),
     routeGeometry: parsePoints(geometryJson),
     routeSegments: segmentsJson.map((seg) =>
       Array.isArray(seg) ? parsePoints(seg) : [],
     ),
     usedOsrm: Boolean(json?.usedOsrm),
     routingProfile: profile,
+    collectedScore:
+      typeof json?.collectedScore === 'number' ? json.collectedScore : null,
+    skippedAttractionIds: Array.isArray(json?.skippedAttractionIds)
+      ? json.skippedAttractionIds.map((i: unknown) => Number(i))
+      : [],
+    timeBudgetMinutes:
+      typeof json?.timeBudgetMinutes === 'number' ? json.timeBudgetMinutes : null,
   };
 };

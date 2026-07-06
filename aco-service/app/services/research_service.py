@@ -1,3 +1,10 @@
+"""Offline benchmark lab behind /research (the control-web Algorithms section).
+
+Runs ACO, PSO, nearest-neighbour and brute-force on fixed Cluj sets using
+Haversine distances (no OSRM, so results are deterministic and reproducible).
+Stochastic algorithms are run N times with distinct seeds and reported as
+mean +/- std, not a single lucky run.
+"""
 from __future__ import annotations
 
 import json
@@ -57,6 +64,7 @@ DEFAULT_PSO_PARAMS: dict[str, float | int] = {
 
 @lru_cache(maxsize=1)
 def _load_dataset() -> dict[str, Any]:
+    # Benchmark sets rarely change; read the JSON once and cache it in memory.
     with DATA_FILE.open(encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -118,6 +126,7 @@ def _run_aco(
     best_route: list[int] = []
     best_history: list[float] = []
 
+    # Repeat with a different seed each run so we can report mean/std, not one shot.
     for offset in range(runs):
         seed = base_seed + offset
         optimizer = ACOOptimizer(
@@ -192,12 +201,14 @@ def _run_pso(
 
 
 def _improvement_pct(reference: float, value: float) -> float:
+    # How much cheaper `value` is than a baseline (e.g. ACO vs the initial order).
     if reference <= 0:
         return 0.0
     return (reference - value) / reference * 100.0
 
 
 def _gap_pct(optimal: float, value: float) -> float:
+    # How far above the exact optimum `value` sits (0% = optimal). Needs brute force.
     if optimal <= 0:
         return 0.0
     return (value - optimal) / optimal * 100.0
@@ -218,9 +229,10 @@ def compare(
     set_def = _resolve_set(set_name)
     attraction_ids = set_def["attractionIds"]
     points = _build_points(dataset, attraction_ids)
-    matrix = calculate_distance_matrix(points)
+    matrix = calculate_distance_matrix(points)  # Haversine — deterministic, no OSRM
     n = len(points)
 
+    # initial_route = the unoptimized selection order (0,1,2,...): the "do nothing" baseline.
     initial_route = list(range(n))
     initial_cost = calculate_route_cost(initial_route, matrix)
 
@@ -228,6 +240,7 @@ def compare(
     aco = _run_aco(matrix, runs, seed, aco_cfg)
     pso = _run_pso(matrix, runs, seed, pso_cfg)
 
+    # Exact optimum only where it is computationally feasible (small n).
     optimal_cost: float | None = None
     optimal_ms: float | None = None
     if n <= DEFAULT_MAX_POINTS:

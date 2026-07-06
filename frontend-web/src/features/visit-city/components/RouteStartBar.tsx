@@ -32,15 +32,15 @@ export const RouteStartBar: React.FC<Props> = ({ onStart, onModify }) => (
     >
       <Icon name="route" size={20} color="var(--primary-strong)" />
     </span>
-    <span className="title-small" style={{ marginLeft: 4, flex: 1 }}>Route ready</span>
+    <span className="title-small" style={{ marginLeft: 4, flex: 1 }}>Traseu pregătit</span>
     <AppButton
-      label="Modify"
+      label="Modifică"
       variant="text"
       onPress={onModify}
       style={{ width: 'auto', padding: '8px 12px', minHeight: 0 }}
     />
     <AppButton
-      label="Start"
+      label="Pornește"
       variant="filled"
       iconName="play-arrow"
       onPress={onStart}

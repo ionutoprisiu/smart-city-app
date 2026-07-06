@@ -1,3 +1,8 @@
+"""Password hashing (bcrypt) and stateless JWT issue/verify.
+
+The same secret signs and verifies every token, so any service can authenticate a
+request by decoding the signature alone — no shared session store or DB lookup.
+"""
 from __future__ import annotations
 
 import secrets
@@ -16,15 +21,17 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, stored_hash: str) -> bool:
+    # Real accounts store a bcrypt hash; the $2a/$2b/$2y prefix marks that format.
     if stored_hash.startswith(("$2a$", "$2b$", "$2y$")):
         return _pwd_context.verify(plain_password, stored_hash)
-    # legacy dev rows may store plaintext
+    # legacy dev rows may store plaintext — compared in constant time to avoid timing leaks
     return secrets.compare_digest(plain_password, stored_hash)
 
 
 def create_access_token(subject_user_id: int) -> str:
     now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.access_token_expire_minutes)
+    # sub = the user id the token stands for; exp = when it stops being valid.
     payload = {
         "sub": str(subject_user_id),
         "iat": int(now.timestamp()),

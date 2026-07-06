@@ -109,27 +109,6 @@ services:
       osrm-driving:
         condition: service_healthy
 
-  chat-service:
-    build:
-      context: ./chat-service
-    container_name: smart-city-chat
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-smart_city_db}
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8002/health\")'"]
-      interval: 10s
-      timeout: 5s
-      retries: 8
-      start_period: 6s
-    ports:
-      - "8002:8002"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   verification-service:
     build:
       context: ./verification-service
@@ -175,21 +154,6 @@ services:
         condition: service_healthy
       verification-service:
         condition: service_healthy
-      chat-service:
-        condition: service_healthy
-
-  control-web:
-    build:
-      context: ./control-web
-    container_name: smart-city-control-web
-    restart: unless-stopped
-    ports:
-      - "8095:80"
-    depends_on:
-      backend:
-        condition: service_healthy
-      aco-service:
-        condition: service_healthy
 
   frontend-web:
     build:
@@ -200,6 +164,8 @@ services:
       - "8096:80"
     depends_on:
       backend:
+        condition: service_healthy
+      aco-service:
         condition: service_healthy
 
 volumes:
