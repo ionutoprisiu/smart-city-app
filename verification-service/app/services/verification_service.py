@@ -1,8 +1,5 @@
-"""Decision layer of /verify: compare the two faces and turn the result into a status.
-
-The vision work (detect face, produce embedding) lives in app.vision; this file
-only computes the similarity and applies the score + quality rules.
-"""
+# Decision layer of /verify: the vision work lives in app.vision; here we only
+# compute the similarity and apply the score + quality rules.
 from __future__ import annotations
 
 import numpy as np
@@ -26,9 +23,9 @@ def _decide(score: float, quality_ok: bool) -> tuple[VerificationStatus, str]:
     # poor images goes to a human; anything below the threshold is rejected.
     if score >= settings.approve_threshold:
         if quality_ok:
-            return VerificationStatus.APPROVED, "Auto-approved by InsightFace (face match)"
-        return VerificationStatus.MANUAL_REVIEW, "Face match acceptable but image quality needs review"
-    return VerificationStatus.REJECTED, "Face match is below approval threshold"
+            return VerificationStatus.APPROVED, "Aprobat automat de InsightFace (potrivire facială)"
+        return VerificationStatus.MANUAL_REVIEW, "Potrivire acceptabilă, dar calitatea imaginii necesită revizuire"
+    return VerificationStatus.REJECTED, "Potrivirea facială este sub pragul de aprobare"
 
 
 def verify_identity(id_card_bytes: bytes, selfie_bytes: bytes) -> VerificationResult:

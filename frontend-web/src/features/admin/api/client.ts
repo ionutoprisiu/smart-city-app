@@ -120,12 +120,6 @@ export async function rejectVerification(
   });
 }
 
-export async function allowResubmit(userId: number): Promise<AdminVerificationItem> {
-  return apiFetch<AdminVerificationItem>(`/api/admin/verifications/${userId}/allow-resubmit`, {
-    method: "POST",
-  });
-}
-
 export async function fetchUsers(): Promise<AdminUserItem[]> {
   const data = await apiFetch<{ items: AdminUserItem[] }>("/api/admin/users");
   return data.items;

@@ -29,7 +29,7 @@ def test_decide_rejects_low_score() -> None:
 def test_decide_keeps_borderline_score_in_review_when_quality_is_low() -> None:
     status, reason = svc._decide(0.60, quality_ok=False)
     assert status == VerificationStatus.MANUAL_REVIEW
-    assert "quality" in reason.lower()
+    assert "calitatea" in reason.lower()
 
 
 def test_pick_best_face_prefers_left_portrait_on_id() -> None:

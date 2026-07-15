@@ -10,11 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@turf/helpers": "^7.3.5",
-    "@turf/line-offset": "^7.3.5",
-    "@turf/simplify": "^7.3.5",
     "leaflet": "^1.9.4",
-    "leaflet-polylineoffset": "^1.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-leaflet": "^5.0.0",

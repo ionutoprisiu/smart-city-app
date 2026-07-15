@@ -1,8 +1,5 @@
-"""Turns raw OpenStreetMap POIs (from Overpass) into TouristAttraction rows.
-
-The heuristics here decide what counts as an attraction, which category it is, and
-how "important" it is — all derived from OSM tags, since OSM has no such fields.
-"""
+# Turns raw OpenStreetMap POIs (Overpass) into TouristAttraction rows: what counts
+# as an attraction, its category and importance — all derived from OSM tags.
 from __future__ import annotations
 
 import logging

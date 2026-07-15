@@ -19,13 +19,8 @@ venv/
 env/
 *.egg-info/
 
-# ── React Native / Node (frontend) ──
-frontend/node_modules/
-frontend/ios/Pods/
-frontend/ios/build/
-frontend/ios/DerivedData/
-frontend/ios/Pods/ReactNativeDependencies-artifacts/
-frontend/ios/build/generated/
+# ── Node (frontend-web) ──
+frontend-web/node_modules/
 
 # ── Build artifacts ──
 build/
@@ -39,9 +34,6 @@ target/
 
 # ── OSRM preprocessed data (large, local-only) ──
 osrm-service/data/
-
-# ── Documentation (personal, not part of source) ──
-documentation/
 
 # ── Logs ──
 *.log

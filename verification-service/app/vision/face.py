@@ -1,9 +1,6 @@
-"""Face detection and embedding extraction with InsightFace.
-
-Given an image, it detects faces at several scales, picks the best one, and
-returns a normalized ArcFace embedding plus a quality measurement. The ID card and
-the selfie use slightly different strategies (see extract_id_portrait / _selfie).
-"""
+# Face detection and embedding extraction with InsightFace: multi-scale detection,
+# best-face pick, normalized ArcFace embedding + quality; the ID card and the selfie
+# use slightly different strategies (extract_id_portrait / extract_selfie).
 from __future__ import annotations
 
 from functools import lru_cache

@@ -208,6 +208,29 @@ export const VerificationPage: React.FC = () => {
             ) : null}
 
             <div style={{ height: 18 }} />
+            <div
+              className="body-small"
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'flex-start',
+                padding: '10px 12px',
+                borderRadius: 12,
+                background: 'color-mix(in srgb, var(--primary) 7%, transparent)',
+                color: 'var(--on-surface-variant)',
+                marginBottom: 12,
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              <Icon name="lock" size={15} color="var(--primary)" />
+              <span>
+                Prin trimitere îți exprimi <b>consimțământul explicit</b> pentru prelucrarea
+                imaginilor (buletin și selfie) exclusiv în scopul verificării identității.
+                Imaginile sunt procesate și stocate <b>local</b>, sunt vizibile doar
+                administratorului și se șterg definitiv odată cu contul.
+              </span>
+            </div>
             <AppButton
               label="Trimite spre verificare"
               iconName="verified-user"

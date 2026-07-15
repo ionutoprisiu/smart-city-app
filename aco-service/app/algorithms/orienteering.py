@@ -1,16 +1,6 @@
-"""Orienteering Problem (OP) solvers: pick WHICH nodes to visit and in what order.
-
-Unlike the TSP flavour (visit everything, minimize cost), the OP gives every
-node a score/prize and the tourist a time budget. A route is any open path from
-the anchor (node 0) whose total time — travel plus per-node visit duration —
-stays within the budget; the goal is to maximize the collected score. This is
-the "tourist trip design" formulation: you rarely have time for everything, so
-the algorithm must also decide what to skip.
-
-Units are caller-defined but must be consistent: cost matrix, service times and
-budget all in the same unit (e.g. minutes). Node 0 is the fixed start and
-carries no score; by convention its service time is 0.
-"""
+# Orienteering Problem solvers: pick which nodes to visit and in what order so that
+# travel + visit time fits the budget, maximizing collected score (node 0 = fixed
+# start, no score; matrix, service times and budget must share one unit).
 from __future__ import annotations
 
 import logging
@@ -41,7 +31,7 @@ def route_time(
     cost_matrix: list[list[float]],
     service_times: list[float] | None = None,
 ) -> float:
-    """Total time of an open path: travel along its edges + visit time per node."""
+    # Travel along the edges plus per-node visit time.
     travel = sum(cost_matrix[route[i]][route[i + 1]] for i in range(len(route) - 1))
     if service_times is None:
         return travel
@@ -80,7 +70,7 @@ def greedy_orienteering(
     budget: float,
     service_times: list[float] | None = None,
 ) -> tuple[list[int], float]:
-    """Deterministic baseline: always grab the best score-per-time deal that still fits."""
+    # Greedy baseline: repeatedly take the best score-per-time node that still fits.
     service = _validate(cost_matrix, scores, budget, service_times)
 
     route = [0]
@@ -113,12 +103,8 @@ def brute_force_orienteering(
     service_times: list[float] | None = None,
     max_points: int = DEFAULT_MAX_POINTS_EXACT,
 ) -> tuple[list[int], float]:
-    """Exact optimum by depth-first search over every feasible path (small n only).
-
-    Any prefix of a feasible path is itself feasible, so the DFS can prune as
-    soon as the budget is exceeded — much cheaper than enumerating all
-    subset-permutations blindly, but still exponential.
-    """
+    # Exact optimum via DFS over feasible paths; prunes on budget (any prefix of a
+    # feasible path is feasible), still exponential — small n only.
     service = _validate(cost_matrix, scores, budget, service_times)
     n = len(cost_matrix)
     if n > max_points:
@@ -156,16 +142,10 @@ def brute_force_orienteering(
     return best_route, best_score
 
 
+# ACO adapted to the OP — three changes versus the TSP colony (aco.py): construction
+# stops when nothing fits the budget, the heuristic becomes score/time and pheromone
+# reinforces high-scoring routes; the rest is kept identical on purpose.
 class OrienteeringACO:
-    """ACO adapted to the OP: ants fill a time budget instead of visiting everything.
-
-    Three changes versus the TSP colony (aco.py): construction stops when no
-    remaining node fits the budget, the heuristic becomes score per unit of time
-    (instead of 1/cost), and pheromone reinforces high-scoring routes (instead
-    of short ones). Everything else — evaporation, early stopping, the
-    best-so-far bookkeeping — is deliberately kept identical, so the comparison
-    between the two variants isolates the problem change, not tuning drift.
-    """
 
     def __init__(
         self,

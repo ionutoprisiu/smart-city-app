@@ -18,6 +18,19 @@ type PendingAction =
   | { type: "demote"; userId: number }
   | { type: "reset"; userId: number };
 
+const ROLE_LABELS: Record<string, string> = {
+  USER: "Turist",
+  GUIDE: "Ghid",
+  ADMIN: "Administrator",
+};
+
+const VERIFICATION_LABELS: Record<string, string> = {
+  APPROVED: "Aprobat",
+  PENDING: "În așteptare",
+  REJECTED: "Respins",
+  NOT_SUBMITTED: "Netrimis",
+};
+
 export function UsersPage() {
   const [items, setItems] = useState<AdminUserItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +45,7 @@ export function UsersPage() {
     try {
       setItems(await fetchUsers());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+      setError(err instanceof Error ? err.message : "Nu s-au putut încărca datele");
     } finally {
       setLoading(false);
     }
@@ -48,7 +61,7 @@ export function UsersPage() {
       await promoteGuide(userId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Promote failed");
+      setError(err instanceof Error ? err.message : "Promovarea a eșuat");
     } finally {
       setBusyId(null);
     }
@@ -60,7 +73,7 @@ export function UsersPage() {
       await demoteToUser(userId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Demote failed");
+      setError(err instanceof Error ? err.message : "Retrogradarea a eșuat");
     } finally {
       setBusyId(null);
       setPendingAction(null);
@@ -73,7 +86,7 @@ export function UsersPage() {
       await resetUserVerification(userId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reset verification failed");
+      setError(err instanceof Error ? err.message : "Resetarea verificării a eșuat");
     } finally {
       setBusyId(null);
       setPendingAction(null);
@@ -90,7 +103,7 @@ export function UsersPage() {
       setEditingUser(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setError(err instanceof Error ? err.message : "Actualizarea a eșuat");
     } finally {
       setBusyId(null);
     }
@@ -103,7 +116,7 @@ export function UsersPage() {
       setPendingAction(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setError(err instanceof Error ? err.message : "Ștergerea a eșuat");
     } finally {
       setBusyId(null);
     }
@@ -113,27 +126,27 @@ export function UsersPage() {
     <section>
       <div className="section-head">
         <div>
-          <h2>Users</h2>
-          <p className="muted">Manage accounts, roles, and verification</p>
+          <h2>Utilizatori</h2>
+          <p className="muted">Gestionează conturi, roluri și verificări</p>
         </div>
         <button type="button" className="ghost" onClick={() => void load()} disabled={loading}>
           <Icon name="refresh" size={18} />
-          Reload
+          Reîncarcă
         </button>
       </div>
 
       {error ? <p className="error banner">{error}</p> : null}
-      {loading ? <p className="muted">Loading...</p> : null}
+      {loading ? <p className="muted">Se încarcă…</p> : null}
 
       {!loading ? (
         <div className="card table-wrap">
           <table className="users-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th>Nume</th>
                 <th>Email</th>
-                <th>Role</th>
-                <th>Verification</th>
+                <th>Rol</th>
+                <th>Verificare</th>
                 <th />
               </tr>
             </thead>
@@ -151,11 +164,13 @@ export function UsersPage() {
                   </td>
                   <td>{user.email}</td>
                   <td>
-                    <span className={`pill pill-${user.role.toLowerCase()}`}>{user.role}</span>
+                    <span className={`pill pill-${user.role.toLowerCase()}`}>
+                      {ROLE_LABELS[user.role] ?? user.role}
+                    </span>
                   </td>
                   <td>
                     <span className={`status-dot status-${user.verificationStatus.toLowerCase()}`} />
-                    {user.verificationStatus}
+                    {VERIFICATION_LABELS[user.verificationStatus] ?? user.verificationStatus}
                   </td>
                   <td className="actions-cell">
                     <div className="actions">
@@ -172,7 +187,7 @@ export function UsersPage() {
                         <button
                           type="button"
                           className="icon-action icon-action--danger"
-                          title="Delete user"
+                          title="Șterge utilizatorul"
                           disabled={busyId === user.userId}
                           onClick={() => setPendingAction({ type: "delete", user })}
                         >
@@ -186,7 +201,7 @@ export function UsersPage() {
                           disabled={busyId === user.userId}
                           onClick={() => setPendingAction({ type: "demote", userId: user.userId })}
                         >
-                          Demote
+                          Retrogradează
                         </button>
                       ) : null}
                       {user.role === "USER" &&
@@ -198,7 +213,7 @@ export function UsersPage() {
                           disabled={busyId === user.userId}
                           onClick={() => void onPromote(user.userId)}
                         >
-                          Promote
+                          Promovează
                         </button>
                       ) : null}
                       {user.role === "USER" &&
@@ -209,7 +224,7 @@ export function UsersPage() {
                           disabled={busyId === user.userId}
                           onClick={() => setPendingAction({ type: "reset", userId: user.userId })}
                         >
-                          Reset
+                          Resetează
                         </button>
                       ) : null}
                     </div>
@@ -232,9 +247,9 @@ export function UsersPage() {
 
       {pendingAction?.type === "delete" ? (
         <ConfirmDialog
-          title="Delete user?"
-          message={`This permanently removes ${pendingAction.user.firstName} ${pendingAction.user.lastName} and their clubs, events, and messages.`}
-          confirmLabel="Delete"
+          title="Ștergi utilizatorul?"
+          message={`Șterge definitiv contul lui ${pendingAction.user.firstName} ${pendingAction.user.lastName} și tururile publicate de el.`}
+          confirmLabel="Șterge"
           destructive
           loading={busyId === pendingAction.user.userId}
           onConfirm={() => void onDelete(pendingAction.user)}
@@ -244,9 +259,9 @@ export function UsersPage() {
 
       {pendingAction?.type === "demote" ? (
         <ConfirmDialog
-          title="Demote guide?"
-          message="The user must verify their identity again before becoming guide."
-          confirmLabel="Demote"
+          title="Retrogradezi ghidul?"
+          message="Utilizatorul va trebui să-și verifice din nou identitatea pentru a redeveni ghid."
+          confirmLabel="Retrogradează"
           loading={busyId === pendingAction.userId}
           onConfirm={() => void onDemote(pendingAction.userId)}
           onCancel={() => setPendingAction(null)}
@@ -255,9 +270,9 @@ export function UsersPage() {
 
       {pendingAction?.type === "reset" ? (
         <ConfirmDialog
-          title="Reset verification?"
-          message="The user will need to submit identity documents again."
-          confirmLabel="Reset"
+          title="Resetezi verificarea?"
+          message="Utilizatorul va trebui să retrimită documentele de identitate."
+          confirmLabel="Resetează"
           loading={busyId === pendingAction.userId}
           onConfirm={() => void onResetVerification(pendingAction.userId)}
           onCancel={() => setPendingAction(null)}

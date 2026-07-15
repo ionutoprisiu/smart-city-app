@@ -872,6 +872,24 @@ a {
   background: color-mix(in srgb, var(--primary) 70%, #0a1628);
   box-shadow: 0 2px 14px color-mix(in srgb, var(--primary) 40%, transparent);
 }
+.admin-root .control-nav__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.admin-root .control-nav__group + .control-nav__group {
+  margin-left: 10px;
+  padding-left: 14px;
+  border-left: 1px solid color-mix(in srgb, #ffffff 15%, transparent);
+}
+.admin-root .control-nav__group-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: color-mix(in srgb, #ffffff 45%, transparent);
+  margin-right: 4px;
+}
 .admin-root .control-logout {
   display: inline-flex;
   align-items: center;
@@ -2386,4 +2404,64 @@ a {
   font-size: 12px;
   font-weight: 600;
   color: var(--on-surface-variant);
+}
+
+/* ===== Stepper de segment pe hartă (parcurgere pas cu pas) ===== */
+
+.leg-stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+.leg-nav {
+  width: 42px;
+  height: 42px;
+  border-radius: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--surface-container-highest);
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 45%, transparent);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.leg-nav:not(:disabled):hover { transform: scale(1.06); background: color-mix(in srgb, var(--primary) 10%, var(--surface-container-highest)); }
+.leg-nav:not(:disabled):active { transform: scale(0.94); }
+.leg-nav:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
+
+.leg-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.leg-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.leg-dot { width: 11px; height: 11px; border-radius: 6px; flex-shrink: 0; box-shadow: 0 0 0 2px color-mix(in srgb, #fff 55%, transparent); }
+
+.leg-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }

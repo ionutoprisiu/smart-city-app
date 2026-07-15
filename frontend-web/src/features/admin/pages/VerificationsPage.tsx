@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdminVerificationItem,
-  allowResubmit,
   approveVerification,
   fetchVerifications,
   rejectVerification,
@@ -13,18 +12,18 @@ type SectionKey = "MANUAL_REVIEW" | "REJECTED" | "APPROVED";
 const SECTIONS: { key: SectionKey; title: string; description: string }[] = [
   {
     key: "MANUAL_REVIEW",
-    title: "Needs review",
-    description: "Face match OK but image quality needs a manual decision",
+    title: "Necesită revizuire",
+    description: "Potrivire facială OK, dar calitatea imaginii cere o decizie manuală",
   },
   {
     key: "REJECTED",
-    title: "Rejected",
-    description: "Low match score; admin may approve manually or allow resubmit",
+    title: "Respinse",
+    description: "Scor de potrivire scăzut; utilizatorul poate retrimite direct documentele. Aprobă acordă manual rolul de ghid, Respinge șterge complet cererea",
   },
   {
     key: "APPROVED",
-    title: "Auto-approved",
-    description: "InsightFace match passed — user is guide; demote from Users if needed",
+    title: "Aprobate automat",
+    description: "Potrivire InsightFace reușită — utilizatorul e ghid; retrogradează din Utilizatori dacă e nevoie",
   },
 ];
 
@@ -40,7 +39,7 @@ export function VerificationsPage() {
     try {
       setItems(await fetchVerifications());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+      setError(err instanceof Error ? err.message : "Nu s-au putut încărca datele");
     } finally {
       setLoading(false);
     }
@@ -71,14 +70,14 @@ export function VerificationsPage() {
       await approveVerification(userId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Approve failed");
+      setError(err instanceof Error ? err.message : "Aprobarea a eșuat");
     } finally {
       setBusyId(null);
     }
   }
 
   async function onReject(userId: number) {
-    const reason = window.prompt("Rejection reason (optional):") ?? undefined;
+    const reason = window.prompt("Motivul respingerii (opțional):") ?? undefined;
     if (reason === undefined) {
       return;
     }
@@ -87,25 +86,7 @@ export function VerificationsPage() {
       await rejectVerification(userId, reason.trim() || undefined);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reject failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function onAllowResubmit(userId: number) {
-    const confirmed = window.confirm(
-      "Allow this user to upload their documents again?",
-    );
-    if (!confirmed) {
-      return;
-    }
-    setBusyId(userId);
-    try {
-      await allowResubmit(userId);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Allow resubmit failed");
+      setError(err instanceof Error ? err.message : "Respingerea a eșuat");
     } finally {
       setBusyId(null);
     }
@@ -115,16 +96,16 @@ export function VerificationsPage() {
     <section>
       <div className="section-head">
         <div>
-          <h2>Identity verifications</h2>
-          <p className="muted">Only an admin can give final account approval.</p>
+          <h2>Verificări de identitate</h2>
+          <p className="muted">Doar administratorul dă aprobarea finală a conturilor.</p>
         </div>
         <button type="button" className="ghost" onClick={() => void load()} disabled={loading}>
-          Reload
+          Reîncarcă
         </button>
       </div>
 
       {error ? <p className="error banner">{error}</p> : null}
-      {loading ? <p className="muted">Loading...</p> : null}
+      {loading ? <p className="muted">Se încarcă…</p> : null}
 
       {!loading
         ? SECTIONS.map((section) => (
@@ -138,7 +119,7 @@ export function VerificationsPage() {
               </div>
 
               {grouped[section.key].length === 0 ? (
-                <div className="card empty-state">No users in this section.</div>
+                <div className="card empty-state">Niciun utilizator în această secțiune.</div>
               ) : (
                 <div className="stack">
                   {grouped[section.key].map((item) => (
@@ -148,7 +129,6 @@ export function VerificationsPage() {
                       busy={busyId === item.userId}
                       onApprove={onApprove}
                       onReject={onReject}
-                      onAllowResubmit={onAllowResubmit}
                     />
                   ))}
                 </div>

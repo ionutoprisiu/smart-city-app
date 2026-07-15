@@ -5,17 +5,26 @@ import { Icon } from '@shared/components/Icon';
 type Props = {
   onStart: () => void;
   onModify: () => void;
+  modifyLabel?: string;
+  // When true, drop the own panel so it can sit under a shared card (top divider).
+  bare?: boolean;
 };
 
-export const RouteStartBar: React.FC<Props> = ({ onStart, onModify }) => (
+export const RouteStartBar: React.FC<Props> = ({
+  onStart,
+  onModify,
+  modifyLabel = 'Modifică',
+  bare = false,
+}) => (
   <div
-    className="glass-panel"
+    className={bare ? undefined : 'glass-panel'}
     style={{
       display: 'flex',
       alignItems: 'center',
-      padding: '12px 16px',
-      borderRadius: 22,
+      padding: bare ? '12px 18px 16px' : '12px 16px',
+      borderRadius: bare ? 0 : 22,
       gap: 8,
+      borderTop: bare ? '1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent)' : undefined,
     }}
   >
     <span
@@ -34,7 +43,7 @@ export const RouteStartBar: React.FC<Props> = ({ onStart, onModify }) => (
     </span>
     <span className="title-small" style={{ marginLeft: 4, flex: 1 }}>Traseu pregătit</span>
     <AppButton
-      label="Modifică"
+      label={modifyLabel}
       variant="text"
       onPress={onModify}
       style={{ width: 'auto', padding: '8px 12px', minHeight: 0 }}

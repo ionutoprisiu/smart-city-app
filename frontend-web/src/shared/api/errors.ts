@@ -25,7 +25,15 @@ export const messageFromResponseBody = (body: string, fallback = 'Cererea a eșu
       }
     }
   } catch {}
-  return body || fallback;
+  // Non-JSON bodies (e.g. raw nginx error pages) must not be dumped in the UI.
+  const trimmed = (body || '').trim();
+  if (!trimmed || trimmed.startsWith('<')) {
+    if (/413|Entity Too Large/i.test(trimmed)) {
+      return 'Fișierele încărcate sunt prea mari. Alege imagini mai mici (max ~25 MB în total).';
+    }
+    return fallback;
+  }
+  return trimmed;
 };
 
 export const extractErrorMessage = (error: unknown): string => {

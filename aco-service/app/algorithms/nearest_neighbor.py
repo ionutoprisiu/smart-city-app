@@ -1,4 +1,4 @@
-"""Greedy nearest-neighbour heuristic: the fast, low-quality baseline for ACO."""
+# Greedy nearest-neighbour heuristic — the fast baseline for ACO.
 from __future__ import annotations
 
 from app.common.distance import calculate_route_cost

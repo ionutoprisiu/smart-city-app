@@ -1,8 +1,5 @@
-"""Attraction catalog for Visit City: read the stored catalog and sync it from OSM.
-
-Route optimization itself is delegated to route_optimization_service; this file
-only manages the list of attractions the user picks from.
-"""
+# Attraction catalog for Visit City: reads the stored catalog and syncs it from OSM.
+# Optimization itself is delegated to route_optimization_service.
 from __future__ import annotations
 
 from typing import Any

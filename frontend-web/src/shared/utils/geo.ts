@@ -119,6 +119,20 @@ export const splitGeometryBySteps = (
     return [];
   }
 
+  // Haversine-fallback geometry is the stop list itself (one vertex per step).
+  // The nearest-point search below assumes dense road geometry and would glue
+  // legs together here — pair consecutive vertices directly instead.
+  if (geometry.length === steps.length) {
+    const pairs: [number, number][][] = [];
+    for (let i = 0; i < geometry.length - 1; i++) {
+      pairs.push([
+        [geometry[i].latitude, geometry[i].longitude],
+        [geometry[i + 1].latitude, geometry[i + 1].longitude],
+      ]);
+    }
+    return pairs;
+  }
+
   const splitIndices: number[] = [0];
   let searchFrom = 0;
   const minStepPoints = Math.max(2, Math.floor(geometry.length / Math.max(steps.length * 3, 8)));

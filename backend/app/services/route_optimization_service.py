@@ -1,9 +1,5 @@
-"""Bridges the Visit City request to aco-service.
-
-Loads the chosen attractions from the DB, forwards them to aco-service (which owns
-the fixed UTCN start), and reshapes the reply for the client. All the optimization
-happens in aco-service; this file just translates in and out.
-"""
+# Bridge between Visit City and aco-service: loads the chosen attractions, forwards
+# them (aco-service owns the fixed UTCN start) and reshapes the reply for the client.
 from __future__ import annotations
 
 import logging
@@ -99,16 +95,20 @@ def _build_aco_body(
         "routingProfile": routing_profile,
         "useOsrm": True,
     }
+    # Visit durations travel with the request whenever the caller knows them
+    # (tours always do) — even without a budget, so the reported total honestly
+    # includes the visits, not just the walking/driving time.
+    durations = visit_durations or {}
+    for entry, attraction in zip(body["attractions"], attractions):
+        duration = durations.get(attraction.id)
+        if duration is not None:
+            entry["visitDurationMinutes"] = duration
+
     if time_budget_minutes is not None:
-        # Orienteering mode: the catalog importance score is the prize, the
-        # guide's visit durations are the per-node time price.
+        # Orienteering mode: the catalog importance score is the prize.
         body["timeBudgetMinutes"] = time_budget_minutes
-        durations = visit_durations or {}
         for entry, attraction in zip(body["attractions"], attractions):
             entry["score"] = attraction.importance_score
-            duration = durations.get(attraction.id)
-            if duration is not None:
-                entry["visitDurationMinutes"] = duration
     return body
 
 

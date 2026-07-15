@@ -55,11 +55,11 @@ export function VerificationImage({ src, alt }: VerificationImageProps) {
   }, [src]);
 
   if (failed) {
-    return <div className="image-placeholder">Image unavailable</div>;
+    return <div className="image-placeholder">Imagine indisponibilă</div>;
   }
 
   if (!objectUrl) {
-    return <div className="image-placeholder">Loading...</div>;
+    return <div className="image-placeholder">Se încarcă…</div>;
   }
 
   return <img src={objectUrl} alt={alt} className="verification-image" />;

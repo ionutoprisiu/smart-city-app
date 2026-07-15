@@ -10,6 +10,7 @@ from typing import Any
 from app.algorithms.aco import ACOOptimizer
 from app.algorithms.brute_force import DEFAULT_MAX_POINTS, brute_force
 from app.algorithms.nearest_neighbor import nearest_neighbor
+from app.algorithms.two_opt import two_opt
 from app.common.distance import calculate_distance_matrix, calculate_route_cost
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "app" / "data" / "benchmark_sets.json"
@@ -36,21 +37,30 @@ def _timed(func) -> tuple[Any, float]:
     return result, (time.perf_counter() - start) * 1000.0
 
 
-def run_aco(matrix: list[list[float]], runs: int) -> dict[str, float]:
+def run_aco(matrix: list[list[float]], runs: int) -> tuple[dict[str, float], dict[str, float]]:
+    """Run ACO over `runs` seeds; also refine each run with 2-opt (memetic hybrid).
+
+    Returns (aco_stats, aco2opt_stats), mirroring research_service.compare so the
+    offline benchmark reproduces the same columns as the admin Algorithms lab.
+    """
     costs: list[float] = []
+    refined: list[float] = []
     times_ms: list[float] = []
-    best_cost = float("inf")
     for seed in range(runs):
-        (_, cost), elapsed = _timed(lambda s=seed: ACOOptimizer(matrix, seed=s).optimize())
+        (route, cost), elapsed = _timed(lambda s=seed: ACOOptimizer(matrix, seed=s).optimize())
         costs.append(cost)
+        refined.append(two_opt(matrix, route)[1])
         times_ms.append(elapsed)
-        best_cost = min(best_cost, cost)
-    return {
-        "mean": statistics.fmean(costs),
-        "std": statistics.pstdev(costs) if len(costs) > 1 else 0.0,
-        "best": best_cost,
-        "time_ms": statistics.fmean(times_ms),
-    }
+
+    def stats(values: list[float]) -> dict[str, float]:
+        return {
+            "mean": statistics.fmean(values),
+            "std": statistics.pstdev(values) if len(values) > 1 else 0.0,
+            "best": min(values),
+            "time_ms": statistics.fmean(times_ms),
+        }
+
+    return stats(costs), stats(refined)
 
 
 def evaluate_set(dataset: dict[str, Any], set_def: dict[str, Any], runs: int) -> dict[str, Any]:
@@ -63,7 +73,8 @@ def evaluate_set(dataset: dict[str, Any], set_def: dict[str, Any], runs: int) ->
     initial_cost = calculate_route_cost(initial_route, matrix)
 
     (greedy_route, greedy_cost), greedy_ms = _timed(lambda: nearest_neighbor(matrix))
-    aco = run_aco(matrix, runs)
+    (_, nn2_cost), nn2_ms = _timed(lambda: two_opt(matrix))  # 2-opt over the NN start
+    aco, aco2 = run_aco(matrix, runs)
 
     optimal_cost: float | None = None
     optimal_ms: float | None = None
@@ -76,7 +87,10 @@ def evaluate_set(dataset: dict[str, Any], set_def: dict[str, Any], runs: int) ->
         "initial_cost": initial_cost,
         "greedy_cost": greedy_cost,
         "greedy_ms": greedy_ms,
+        "nn2opt_cost": nn2_cost,
+        "nn2opt_ms": nn2_ms,
         "aco": aco,
+        "aco2opt": aco2,
         "optimal_cost": optimal_cost,
         "optimal_ms": optimal_ms,
     }
@@ -96,19 +110,21 @@ def _gap_pct(optimal: float, value: float) -> float:
 
 def format_markdown(results: list[dict[str, Any]]) -> str:
     header = (
-        "| Set | n | Inițial (km) | Nearest-neighbor (km) | ACO medie±std (km) | "
-        "ACO best (km) | Optim (km) | ACO vs inițial | ACO vs optim | ACO timp (ms) |\n"
-        "|---|---|---|---|---|---|---|---|---|---|\n"
+        "| Set | n | Inițial (km) | NN (km) | NN+2opt (km) | ACO medie±std (km) | "
+        "ACO+2opt medie±std (km) | Optim (km) | ACO vs inițial | ACO vs optim | ACO timp (ms) |\n"
+        "|---|---|---|---|---|---|---|---|---|---|---|\n"
     )
     rows = []
     for r in results:
         aco = r["aco"]
+        aco2 = r["aco2opt"]
         optimal = r["optimal_cost"]
         opt_str = f"{optimal:.2f}" if optimal is not None else "—"
         gap_str = f"+{_gap_pct(optimal, aco['mean']):.1f}%" if optimal is not None else "—"
         rows.append(
             f"| {r['name']} | {r['n']} | {r['initial_cost']:.2f} | {r['greedy_cost']:.2f} | "
-            f"{aco['mean']:.2f}±{aco['std']:.2f} | {aco['best']:.2f} | {opt_str} | "
+            f"{r['nn2opt_cost']:.2f} | {aco['mean']:.2f}±{aco['std']:.2f} | "
+            f"{aco2['mean']:.2f}±{aco2['std']:.2f} | {opt_str} | "
             f"−{_improvement_pct(r['initial_cost'], aco['mean']):.1f}% | {gap_str} | "
             f"{aco['time_ms']:.1f} |"
         )
@@ -123,17 +139,22 @@ def write_csv(results: list[dict[str, Any]], path: Path) -> None:
         writer.writerow(
             [
                 "set", "n", "initial_cost", "greedy_cost", "greedy_ms",
+                "nn2opt_cost", "nn2opt_ms",
                 "aco_mean", "aco_std", "aco_best", "aco_time_ms",
+                "aco2opt_mean", "aco2opt_std", "aco2opt_best",
                 "optimal_cost", "optimal_ms",
             ]
         )
         for r in results:
             aco = r["aco"]
+            aco2 = r["aco2opt"]
             writer.writerow(
                 [
                     r["name"], r["n"], f"{r['initial_cost']:.4f}", f"{r['greedy_cost']:.4f}",
-                    f"{r['greedy_ms']:.4f}", f"{aco['mean']:.4f}", f"{aco['std']:.4f}",
+                    f"{r['greedy_ms']:.4f}", f"{r['nn2opt_cost']:.4f}", f"{r['nn2opt_ms']:.4f}",
+                    f"{aco['mean']:.4f}", f"{aco['std']:.4f}",
                     f"{aco['best']:.4f}", f"{aco['time_ms']:.4f}",
+                    f"{aco2['mean']:.4f}", f"{aco2['std']:.4f}", f"{aco2['best']:.4f}",
                     "" if r["optimal_cost"] is None else f"{r['optimal_cost']:.4f}",
                     "" if r["optimal_ms"] is None else f"{r['optimal_ms']:.4f}",
                 ]

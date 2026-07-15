@@ -29,6 +29,10 @@ export const ToursPage: React.FC = () => {
   const navigate = useNavigate();
   const applyTourRoute = useVisitCityStore((s) => s.applyTourRoute);
   const role = useAuthStore((s) => s.currentUser?.role);
+  const myId = useAuthStore((s) => s.currentUser?.id);
+  // Two-step delete confirm: first tap arms the button, second tap deletes.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const isGuide = role === 'guide' || role === 'admin';
 
   const [tours, setTours] = useState<TourSummary[]>([]);
@@ -91,7 +95,7 @@ export const ToursPage: React.FC = () => {
         );
         return;
       }
-      applyTourRoute(detail.attractions.map((a) => a.attractionId), result);
+      applyTourRoute(detail.attractions.map((a) => a.attractionId), result, tour.id);
       navigate('/visit-city');
     } catch (e) {
       setError(extractErrorMessage(e));
@@ -176,7 +180,51 @@ export const ToursPage: React.FC = () => {
                   </div>
 
                   <div className="tour-body">
-                    <div className="title-large" style={{ fontSize: 19 }}>{t.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <div className="title-large" style={{ fontSize: 19, flex: 1 }}>{t.title}</div>
+                      {role === 'guide' && myId != null && t.createdBy === myId ? (
+                        <button
+                          type="button"
+                          disabled={deletingId === t.id}
+                          onClick={async () => {
+                            if (confirmDeleteId !== t.id) {
+                              setConfirmDeleteId(t.id);
+                              return;
+                            }
+                            setDeletingId(t.id);
+                            try {
+                              await ToursApi.remove(t.id);
+                              setTours((prev) => prev.filter((x) => x.id !== t.id));
+                            } catch (e) {
+                              setError(extractErrorMessage(e));
+                            } finally {
+                              setDeletingId(null);
+                              setConfirmDeleteId(null);
+                            }
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '6px 10px',
+                            borderRadius: 10,
+                            flexShrink: 0,
+                            fontSize: 12.5,
+                            fontWeight: 600,
+                            color: 'var(--error)',
+                            background:
+                              confirmDeleteId === t.id
+                                ? 'color-mix(in srgb, var(--error) 14%, transparent)'
+                                : 'transparent',
+                            border: '1px solid color-mix(in srgb, var(--error) 30%, transparent)',
+                          }}
+                          title="Șterge turul (doar autorul)"
+                        >
+                          <Icon name="delete-outline" size={16} color="var(--error)" />
+                          {deletingId === t.id ? 'Se șterge…' : confirmDeleteId === t.id ? 'Sigur?' : 'Șterge'}
+                        </button>
+                      ) : null}
+                    </div>
                     {t.description ? (
                       <p className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 4 }}>
                         {t.description}

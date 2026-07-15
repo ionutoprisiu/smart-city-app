@@ -22,12 +22,13 @@ def _route_ok_response(*, legs: list[dict], geometry_coords: list[list[float]]) 
 
 
 @pytest.mark.asyncio
-async def test_fetch_route_segments_single_point_no_http() -> None:
+async def test_fetch_route_details_single_point_no_http() -> None:
     pts = [{"id": 0, "latitude": 46.77, "longitude": 23.59}]
-    segs, durs = await osrm_client.fetch_route_segments(pts, "driving")
+    geom, segs, durs = await osrm_client.fetch_route_details(pts, "driving")
     assert durs == []
     assert len(segs) == 1
     assert segs[0][0]["latitude"] == pytest.approx(46.77)
+    assert geom[0]["latitude"] == pytest.approx(46.77)
 
 
 @pytest.mark.asyncio

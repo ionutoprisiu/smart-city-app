@@ -14,7 +14,7 @@ type Props = {
 export function ConfirmDialog({
   title,
   message,
-  confirmLabel = "Confirm",
+  confirmLabel = "Confirmă",
   destructive = false,
   loading = false,
   onConfirm,
@@ -37,7 +37,7 @@ export function ConfirmDialog({
         </h3>
         <p className="body-medium muted">{message}</p>
         <div className="modal-actions">
-          <AppButton label="Cancel" variant="outlined" onPress={onCancel} disabled={loading} />
+          <AppButton label="Renunță" variant="outlined" onPress={onCancel} disabled={loading} />
           <AppButton
             label={confirmLabel}
             variant={destructive ? "destructive" : "filled"}

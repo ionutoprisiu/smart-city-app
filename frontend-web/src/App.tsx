@@ -33,6 +33,19 @@ export const App: React.FC = () => {
     );
   }
 
+  // An ADMIN account is a system operator: it sees ONLY the admin console, never
+  // the tourist-facing app (Visit City / Tururi / Profile). The two experiences
+  // are fully separated by role.
+  if (currentUser?.role === 'admin') {
+    return (
+      <Routes>
+        <Route path="/admin/*" element={<AdminApp />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
+    );
+  }
+
+  // Regular users (and guides) get the tourist app.
   return (
     <Routes>
       <Route element={<MainLayout />}>
@@ -44,17 +57,7 @@ export const App: React.FC = () => {
       <Route
         path="/tours/create"
         element={
-          currentUser?.role === 'guide' || currentUser?.role === 'admin' ? (
-            <CreateTourPage />
-          ) : (
-            <Navigate to="/tours" replace />
-          )
-        }
-      />
-      <Route
-        path="/admin/*"
-        element={
-          currentUser?.role === 'admin' ? <AdminApp /> : <Navigate to="/visit-city" replace />
+          currentUser?.role === 'guide' ? <CreateTourPage /> : <Navigate to="/tours" replace />
         }
       />
       <Route path="*" element={<Navigate to="/visit-city" replace />} />

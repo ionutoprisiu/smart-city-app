@@ -14,7 +14,10 @@ router = APIRouter(prefix="/tours", tags=["tours"])
 
 
 @router.get("", response_model=list[TourSummary])
-def list_tours(db: Session = Depends(get_db)) -> list[TourSummary]:
+def list_tours(
+    db: Session = Depends(get_db),
+    _user_id: int = Depends(get_current_user_id),
+) -> list[TourSummary]:
     return tours_service.list_tours(db)
 
 
@@ -37,7 +40,11 @@ def create_tour(
 
 
 @router.get("/{tour_id}", response_model=TourDetail)
-def get_tour(tour_id: int, db: Session = Depends(get_db)) -> TourDetail:
+def get_tour(
+    tour_id: int,
+    db: Session = Depends(get_db),
+    _user_id: int = Depends(get_current_user_id),
+) -> TourDetail:
     return tours_service.get_tour(db, tour_id)
 
 
@@ -46,6 +53,7 @@ def optimize_tour(
     tour_id: int,
     body: TourOptimizeRequest | None = None,
     db: Session = Depends(get_db),
+    _user_id: int = Depends(get_current_user_id),
 ) -> dict:
     # Run ACO on the tour's attractions and return the optimized route. With a
     # time budget in the body, only the best-scoring subset that fits is kept.

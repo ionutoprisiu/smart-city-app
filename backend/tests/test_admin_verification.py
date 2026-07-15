@@ -15,6 +15,7 @@ from app.db.base import Base
 from app.main import app as fastapi_app
 from app.models.enums import Role, VerificationStatus
 from app.models.user import User
+from app.services import verification_storage
 
 
 def _seed(db: Any) -> dict[str, int]:
@@ -115,7 +116,7 @@ def test_admin_approves_and_rejects(client: TestClient) -> None:
     approve = client.post(f"/api/admin/verifications/{pending_id}/approve", headers=headers)
     assert approve.status_code == 200
     assert approve.json()["verificationStatus"] == "APPROVED"
-    assert approve.json()["verificationReason"] == "Approved by admin"
+    assert approve.json()["verificationReason"] == "Aprobat de administrator"
 
     empty = client.get("/api/admin/verifications/pending", headers=headers)
     assert empty.json()["items"] == []
@@ -143,6 +144,9 @@ def test_admin_rejects_with_reason(client: TestClient) -> None:
         ids = _seed(db)
         db.close()
         headers = _auth_header(ids["admin_id"])
+        verification_storage.save_verification_images(
+            ids["pending_id"], b"fake-id-card", b"fake-selfie"
+        )
         reject = test_client.post(
             f"/api/admin/verifications/{ids['pending_id']}/reject",
             headers=headers,
@@ -150,12 +154,25 @@ def test_admin_rejects_with_reason(client: TestClient) -> None:
         )
         assert reject.status_code == 200
         body = reject.json()
-        assert body["verificationStatus"] == "REJECTED"
+        # Respingerea șterge complet cererea: stare resetată, documente șterse,
+        # utilizatorul poate depune una nouă de la zero.
+        assert body["verificationStatus"] == "NOT_SUBMITTED"
         assert body["verificationReason"] == "ID photo unreadable"
+        assert verification_storage.id_card_path(ids["pending_id"]) is None
+        assert verification_storage.selfie_path(ids["pending_id"]) is None
+        assert body["idCardImageUrl"] is None
+        assert body["faceImageUrl"] is None
+        # Cererea respinsă nu mai apare în coada de moderare.
+        listing = test_client.get("/api/admin/verifications", headers=headers)
+        assert listing.status_code == 200
+        listed_ids = [item["userId"] for item in listing.json()["items"]]
+        assert ids["pending_id"] not in listed_ids
     fastapi_app.dependency_overrides.clear()
 
 
-def test_admin_allows_resubmit_for_rejected(client: TestClient) -> None:
+def test_rejected_user_can_resubmit_directly(client: TestClient) -> None:
+    # After a rejection there is no admin unlock step anymore: the user may
+    # simply upload new documents right away.
     admin_id = client.ids["admin_id"]  # type: ignore[attr-defined]
     pending_id = client.ids["pending_id"]  # type: ignore[attr-defined]
     headers = _auth_header(admin_id)
@@ -166,25 +183,12 @@ def test_admin_allows_resubmit_for_rejected(client: TestClient) -> None:
         json={"reason": "Try again with better lighting"},
     )
     assert reject.status_code == 200
-    assert reject.json()["verificationStatus"] == "REJECTED"
+    assert reject.json()["verificationStatus"] == "NOT_SUBMITTED"
 
-    allow = client.post(
-        f"/api/admin/verifications/{pending_id}/allow-resubmit",
-        headers=headers,
+    status = client.get(
+        "/api/verification/status", headers=_auth_header(pending_id)
     )
-    assert allow.status_code == 200
-    body = allow.json()
-    assert body["verificationStatus"] == "NOT_SUBMITTED"
-    assert body["verificationReason"] == "Admin allowed a new submission"
-
-
-def test_allow_resubmit_rejects_non_rejected_status(client: TestClient) -> None:
-    admin_id = client.ids["admin_id"]  # type: ignore[attr-defined]
-    pending_id = client.ids["pending_id"]  # type: ignore[attr-defined]
-    headers = _auth_header(admin_id)
-
-    response = client.post(
-        f"/api/admin/verifications/{pending_id}/allow-resubmit",
-        headers=headers,
-    )
-    assert response.status_code == 400
+    assert status.status_code == 200
+    body = status.json()
+    assert body["canSubmit"] is True
+    assert body["submitBlockedReason"] is None

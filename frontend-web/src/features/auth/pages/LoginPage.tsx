@@ -15,11 +15,11 @@ export const LoginPage: React.FC = () => {
   const [showFieldErrors, setShowFieldErrors] = useState(false);
 
   const emailError = showFieldErrors ? Validators.email(email) : undefined;
-  const passwordError = showFieldErrors ? Validators.password(password) : undefined;
+  const passwordError = showFieldErrors ? Validators.loginPassword(password) : undefined;
 
   const handleLogin = async () => {
     setShowFieldErrors(true);
-    if (Validators.email(email) || Validators.password(password)) return;
+    if (Validators.email(email) || Validators.loginPassword(password)) return;
     clearError();
     await login({ email: email.trim(), password });
   };
@@ -63,7 +63,7 @@ export const LoginPage: React.FC = () => {
               hint="Parola ta"
               value={password}
               onChangeText={setPassword}
-              validator={Validators.password}
+              validator={Validators.loginPassword}
               obscureText
               prefixIcon="lock-outline"
               errorMessage={passwordError}

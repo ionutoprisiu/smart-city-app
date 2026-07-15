@@ -5,6 +5,8 @@ import { RouteResult } from '../types';
 type Props = {
   result: RouteResult;
   layout?: 'floating' | 'dock';
+  // When true, drop the own panel background so it can sit inside a shared card.
+  bare?: boolean;
 };
 
 const fmt = (minutes: number) => {
@@ -36,19 +38,19 @@ const Stat: React.FC<{ icon: string; label: string; value: string }> = ({ icon, 
   </div>
 );
 
-export const RouteInfoCard: React.FC<Props> = ({ result, layout = 'floating' }) => {
+export const RouteInfoCard: React.FC<Props> = ({ result, layout = 'floating', bare = false }) => {
   const travelStr = fmt(result.travelTimeMinutes);
   const totalStr = fmt(result.totalTime);
   const docked = layout === 'dock';
 
   return (
     <div
-      className="glass-panel"
+      className={bare ? undefined : 'glass-panel'}
       style={{
         maxWidth: docked ? '100%' : 280,
-        padding: '14px 16px',
-        borderRadius: 20,
-        marginBottom: docked ? 8 : 0,
+        padding: bare ? '16px 18px 14px' : '14px 16px',
+        borderRadius: bare ? 0 : 20,
+        marginBottom: bare ? 0 : docked ? 8 : 0,
         pointerEvents: 'none',
       }}
     >

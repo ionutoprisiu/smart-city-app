@@ -3,11 +3,9 @@ import { Icon } from "../components/Icon";
 import { extractErrorMessage } from "../api/errors";
 import { AlgorithmsApi } from "../features/algorithms/api/algorithmsApi";
 import {
-  ACOParams,
   AlgorithmResult,
   BenchmarkSet,
   CompareResult,
-  DEFAULT_ACO_PARAMS,
 } from "../features/algorithms/types";
 import { ConvergenceChart } from "../features/algorithms/components/ConvergenceChart";
 import { ComparisonChart, ComparisonBar } from "../features/algorithms/components/ComparisonChart";
@@ -15,42 +13,18 @@ import { ComparisonChart, ComparisonBar } from "../features/algorithms/component
 const ALGO_COLORS: Record<string, string> = {
   initial: '#9aa0a6',
   nearest_neighbor: 'var(--tertiary, #b08968)',
+  nn_2opt: '#00897b',
   aco: 'var(--primary)',
+  aco_2opt: '#1557b0',
   pso: '#7c4dff',
   optimal: 'var(--error)',
 };
 
 const PSO_COLOR = '#7c4dff';
 
-type SliderDef<K extends string> = {
-  key: K;
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-  hint: string;
-};
-
-const ACO_SLIDERS: SliderDef<keyof ACOParams>[] = [
-  { key: 'alpha', label: 'Alpha (α) — pheromone weight', min: 0, max: 5, step: 0.1, hint: 'How strongly ants follow existing trails.' },
-  { key: 'beta', label: 'Beta (β) — distance weight', min: 0, max: 5, step: 0.1, hint: 'How strongly ants prefer shorter edges.' },
-  { key: 'rho', label: 'Rho (ρ) — evaporation', min: 0, max: 1, step: 0.05, hint: 'Fraction of pheromone lost each iteration.' },
-  { key: 'q', label: 'Q — deposit factor', min: 10, max: 500, step: 10, hint: 'Amount of pheromone laid per tour.' },
-  { key: 'numAnts', label: 'Ants per iteration', min: 5, max: 100, step: 5, hint: 'Population size each iteration.' },
-  {
-    key: 'earlyStoppingThreshold',
-    label: 'Early stopping',
-    min: 5,
-    max: 100,
-    step: 5,
-    hint: 'Stop after this many iterations without a better tour.',
-  },
-];
-
 export const AlgorithmsPage: React.FC = () => {
   const [sets, setSets] = useState<BenchmarkSet[]>([]);
   const [selectedSet, setSelectedSet] = useState<string>('');
-  const [params, setParams] = useState<ACOParams>({ ...DEFAULT_ACO_PARAMS });
   const [runs, setRuns] = useState(10);
   const [hiddenAlgos, setHiddenAlgos] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -100,7 +74,7 @@ export const AlgorithmsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await AlgorithmsApi.compare({ setName: selectedSet, runs, acoParams: params });
+      const res = await AlgorithmsApi.compare({ setName: selectedSet, runs });
       setResult(res);
       animateConvergence(res.convergence.length);
     } catch (e) {
@@ -110,7 +84,6 @@ export const AlgorithmsPage: React.FC = () => {
     }
   };
 
-  const resetParams = () => setParams({ ...DEFAULT_ACO_PARAMS });
 
   const toggleAlgo = (key: string) =>
     setHiddenAlgos((prev) => {
@@ -138,6 +111,7 @@ export const AlgorithmsPage: React.FC = () => {
         key: a.key,
         label: a.label,
         value: a.cost,
+        best: a.best ?? null,
         color: ALGO_COLORS[a.key] ?? 'var(--primary)',
       })),
     [visibleAlgorithms],
@@ -171,13 +145,13 @@ export const AlgorithmsPage: React.FC = () => {
     if (!acoResult || !psoResult) return '—';
     if (acoResult.cost < psoResult.cost) {
       const pct = ((psoResult.cost - acoResult.cost) / psoResult.cost) * 100;
-      return `−${pct.toFixed(1)}% vs PSO`;
+      return `−${pct.toFixed(1)}%`;
     }
     if (acoResult.cost > psoResult.cost) {
       const pct = ((acoResult.cost - psoResult.cost) / acoResult.cost) * 100;
-      return `+${pct.toFixed(1)}% vs PSO`;
+      return `+${pct.toFixed(1)}%`;
     }
-    return 'Tied with PSO';
+    return 'egal';
   }, [acoResult, psoResult]);
 
   return (
@@ -198,15 +172,15 @@ export const AlgorithmsPage: React.FC = () => {
             <Icon name="science" size={24} color="var(--primary)" />
           </div>
           <div>
-            <div className="title-large">Algorithms</div>
+            <div className="title-large">Algoritmi</div>
             <div className="body-small" style={{ color: "var(--on-surface-variant)" }}>
-              Calibrează și evaluează ACO. Comparația principală: nearest-neighbor și optimul exact. PSO rulează cu parametri impliciți, fără calibrare — reper suplimentar, nu rival optimizat.
+              Comparație pe distanțe Haversine — determinist, reproductibil.
             </div>
           </div>
         </div>
 
         <section style={cardStyle}>
-          <div className="label-medium" style={sectionLabel}>DATASET</div>
+          <div className="label-medium" style={sectionLabel}>SET DE DATE</div>
           <div className="chip-row" style={{ marginBottom: 4 }}>
             {sets.map((s) => {
               const active = s.name === selectedSet;
@@ -224,7 +198,7 @@ export const AlgorithmsPage: React.FC = () => {
           </div>
 
           <div className="label-medium" style={{ ...sectionLabel, marginTop: 18 }}>
-            REPETITIONS: {runs}
+            REPETĂRI: {runs}
           </div>
           <input
             type="range"
@@ -236,39 +210,27 @@ export const AlgorithmsPage: React.FC = () => {
             style={{ width: '100%' }}
           />
           <div className="body-small" style={{ color: 'var(--on-surface-variant)', fontSize: 11 }}>
-            ACO runs {runs} times with different random seeds; results show mean ± std, not a single lucky run.
+            Stochasticii rulează de {runs}× cu seed-uri diferite → medie ± std.
           </div>
 
-          <div className="label-medium" style={{ ...sectionLabel, marginTop: 18, display: 'flex', justifyContent: 'space-between' }}>
-            <span>ACO PARAMETERS</span>
-            <button type="button" onClick={resetParams} style={resetBtnStyle}>
-              <Icon name="restart-alt" size={14} /> Reset
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-            {ACO_SLIDERS.map((slider) => (
-              <div key={slider.key}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span className="body-small" style={{ color: 'var(--on-surface)' }}>{slider.label}</span>
-                  <span className="label-medium" style={{ color: 'var(--primary)' }}>
-                    {Number(params[slider.key]).toFixed(slider.step < 1 ? 2 : 0)}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={slider.min}
-                  max={slider.max}
-                  step={slider.step}
-                  value={params[slider.key]}
-                  onChange={(e) => setParams((p) => ({ ...p, [slider.key]: Number(e.target.value) }))}
-                  style={{ width: '100%' }}
-                />
-                <div className="body-small" style={{ color: 'var(--on-surface-variant)', fontSize: 11 }}>
-                  {slider.hint}
-                </div>
-              </div>
-            ))}
+          <div
+            className="body-small"
+            style={{
+              marginTop: 16,
+              padding: '10px 14px',
+              borderRadius: 12,
+              background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
+              color: 'var(--on-surface-variant)',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'flex-start',
+            }}
+          >
+            <Icon name="tune" size={16} color="var(--primary)" />
+            <span>
+              <strong>Parametri ficși, fără tunare</strong> — ACO: α=1, β=2, ρ=0.5, Q=100, 30 furnici.
+            </span>
           </div>
 
           <button
@@ -290,7 +252,7 @@ export const AlgorithmsPage: React.FC = () => {
             }}
           >
             <Icon name={loading ? 'hourglass-top' : 'play-arrow'} size={20} color="currentColor" />
-            {loading ? 'Running…' : 'Run benchmark'}
+            {loading ? 'Se rulează…' : 'Rulează evaluarea'}
           </button>
 
           {error ? (
@@ -303,35 +265,34 @@ export const AlgorithmsPage: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 16 }}>
               <Stat
                 icon="trending-down"
-                label="ACO vs initial"
+                label="ACO vs. ordine inițială"
                 value={`−${acoResult?.improvementPct?.toFixed(1) ?? '0'}%`}
                 tone="var(--primary)"
               />
               <Stat
                 icon="emoji-events"
-                label="ACO best tour"
+                label="Cel mai bun traseu ACO"
                 value={`${acoResult?.best?.toFixed(2) ?? '—'} km`}
                 tone="var(--on-surface)"
               />
               <Stat
                 icon="rule"
-                label={optimalResult ? 'Gap to optimum' : 'Optimum'}
-                value={optimalResult ? `+${acoResult?.gapPct?.toFixed(1) ?? '0'}%` : 'n > limit'}
+                label={optimalResult ? 'Decalaj față de optim' : 'Optim'}
+                value={optimalResult ? `+${acoResult?.gapPct?.toFixed(1) ?? '0'}%` : 'n > limită'}
                 tone={optimalResult ? 'var(--error)' : 'var(--on-surface-variant)'}
               />
               <Stat
                 icon="compare-arrows"
-                label="ACO vs PSO"
+                label="ACO vs. PSO"
                 value={acoVsPsoLabel}
                 tone={acoResult && psoResult && acoResult.cost <= psoResult.cost ? 'var(--primary)' : PSO_COLOR}
               />
             </div>
 
             <section style={cardStyle}>
-              <div className="title-small" style={{ marginBottom: 4 }}>ACO convergence (best run)</div>
+              <div className="title-small" style={{ marginBottom: 4 }}>Convergența ACO (cea mai bună rulare)</div>
               <div className="body-small" style={{ color: 'var(--on-surface-variant)', marginBottom: 8 }}>
-                Blue line: ACO best run over iterations. Dashed bands: NN, PSO mean ({result.runs} runs), and optimal — same
-                metrics as the bar chart below.
+                Cost minim ACO pe iterații. Punctat: NN, PSO, optim.
               </div>
               {result.convergence.length > 0 ? (
                 <div
@@ -348,11 +309,11 @@ export const AlgorithmsPage: React.FC = () => {
                     Start: <strong style={{ color: 'var(--on-surface)' }}>{result.convergence[0].cost.toFixed(3)} km</strong>
                   </span>
                   <span>
-                    End: <strong style={{ color: 'var(--primary)' }}>{result.convergence[result.convergence.length - 1].cost.toFixed(3)} km</strong>
+                    Final: <strong style={{ color: 'var(--primary)' }}>{result.convergence[result.convergence.length - 1].cost.toFixed(3)} km</strong>
                   </span>
                   {optimalResult && isVisible('optimal') ? (
                     <span>
-                      Optimal: <strong style={{ color: 'var(--error)' }}>{optimalResult.cost.toFixed(3)} km</strong>
+                      Optim: <strong style={{ color: 'var(--error)' }}>{optimalResult.cost.toFixed(3)} km</strong>
                     </span>
                   ) : null}
                 </div>
@@ -366,15 +327,15 @@ export const AlgorithmsPage: React.FC = () => {
                 pso={psoResult && isVisible('pso') ? psoResult.cost : null}
               />
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
-                <Legend color="var(--primary)" label="ACO best cost" />
+                <Legend color="var(--primary)" label="ACO (cost minim)" />
                 {psoResult && isVisible('pso') ? (
-                  <Legend color={PSO_COLOR} label="PSO mean (fixed params)" dashed />
+                  <Legend color={PSO_COLOR} label="PSO (medie)" dashed />
                 ) : null}
                 {greedyResult && isVisible('nearest_neighbor') ? (
                   <Legend color="var(--tertiary, #b08968)" label="Nearest neighbor" dashed />
                 ) : null}
                 {optimalResult && isVisible('optimal') ? (
-                  <Legend color="var(--error)" label="Optimal" dashed />
+                  <Legend color="var(--error)" label="Optim (brute force)" dashed />
                 ) : null}
               </div>
             </section>
@@ -390,7 +351,7 @@ export const AlgorithmsPage: React.FC = () => {
                   marginBottom: 12,
                 }}
               >
-                <span className="title-small">Route length comparison</span>
+                <span className="title-small">Comparație lungime traseu</span>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {result.algorithms.map((a) => {
                     const on = isVisible(a.key);
@@ -420,21 +381,21 @@ export const AlgorithmsPage: React.FC = () => {
                 <ComparisonChart bars={comparisonBars} />
               ) : (
                 <div className="body-small" style={{ color: 'var(--on-surface-variant)' }}>
-                  Select at least one algorithm to display.
+                  Selectează cel puțin un algoritm pentru afișare.
                 </div>
               )}
-              <div className="body-small" style={{ color: 'var(--on-surface-variant)', marginTop: 10 }}>
-                PSO folosește parametri impliciți (necalibrați) — aceeași metrică (medie) ca în graficul de convergență.
+              <div className="body-small" style={{ color: 'var(--on-surface-variant)', marginTop: 10, fontSize: 11.5 }}>
+                Bară mai scurtă = traseu mai bun.
               </div>
             </section>
 
             <section style={cardStyle}>
-              <div className="title-small" style={{ marginBottom: 12 }}>Detailed results</div>
+              <div className="title-small" style={{ marginBottom: 12 }}>Rezultate detaliate</div>
               <ResultsTable algorithms={visibleAlgorithms} optimalAvailable={result.optimalAvailable} />
               {!result.optimalAvailable ? (
                 <div className="body-small" style={{ color: 'var(--on-surface-variant)', marginTop: 10 }}>
-                  Brute-force optimum is only computed for instances up to {result.bruteForceLimit} points
-                  (factorial search space).
+                  Optimul prin brute force se calculează doar pentru instanțe de până la {result.bruteForceLimit} puncte
+                  (spațiu de căutare factorial).
                 </div>
               ) : null}
             </section>
@@ -459,13 +420,6 @@ const sectionLabel: React.CSSProperties = {
   marginBottom: 10,
 };
 
-const resetBtnStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 4,
-  color: 'var(--primary)',
-  fontWeight: 600,
-};
 
 const Stat: React.FC<{ icon: string; label: string; value: string; tone: string }> = ({
   icon,
@@ -473,12 +427,30 @@ const Stat: React.FC<{ icon: string; label: string; value: string; tone: string 
   value,
   tone,
 }) => (
-  <div style={{ ...cardStyle, marginTop: 0, padding: 14 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <Icon name={icon} size={16} color={tone} />
-      <span className="body-small" style={{ color: 'var(--on-surface-variant)' }}>{label}</span>
+  <div style={{ ...cardStyle, marginTop: 0, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <span className="body-small" style={{ color: 'var(--on-surface-variant)', lineHeight: 1.2 }}>{label}</span>
+      <span
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 9,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: `color-mix(in srgb, ${tone} 14%, transparent)`,
+          flexShrink: 0,
+        }}
+      >
+        <Icon name={icon} size={17} color={tone} />
+      </span>
     </div>
-    <div className="title-medium" style={{ marginTop: 6, color: tone }}>{value}</div>
+    <div
+      className="headline-small"
+      style={{ color: tone, fontWeight: 700, fontVariantNumeric: 'tabular-nums', letterSpacing: -0.3 }}
+    >
+      {value}
+    </div>
   </div>
 );
 
@@ -504,11 +476,11 @@ const ResultsTable: React.FC<{ algorithms: AlgorithmResult[]; optimalAvailable: 
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
       <thead>
         <tr style={{ textAlign: 'left', color: 'var(--on-surface-variant)' }}>
-          <th style={thStyle}>Algorithm</th>
+          <th style={thStyle}>Algoritm</th>
           <th style={thStyle}>Cost (km)</th>
-          <th style={thStyle}>vs initial</th>
-          {optimalAvailable ? <th style={thStyle}>Gap to opt.</th> : null}
-          <th style={thStyle}>Time (ms)</th>
+          <th style={thStyle}>vs. inițial</th>
+          {optimalAvailable ? <th style={thStyle}>Decalaj optim</th> : null}
+          <th style={thStyle}>Timp (ms)</th>
         </tr>
       </thead>
       <tbody>

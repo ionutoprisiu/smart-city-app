@@ -65,8 +65,12 @@ def test_invalid_budget_is_rejected(client: TestClient) -> None:
         assert r.status_code == 422
 
 
-def test_classic_request_is_untouched_by_op_fields(client: TestClient) -> None:
-    # No budget -> visit everything, and the OP extras stay at their neutral values.
+def test_classic_request_visits_everything_but_still_counts_visit_time(
+    client: TestClient,
+) -> None:
+    # No budget -> visit everything; the OP selection extras stay neutral, but
+    # the provided visit durations still count toward the reported total (a tour
+    # opened with "no limit" honestly includes the time spent at each stop).
     body = _op_body(30.0)
     del body["timeBudgetMinutes"]
     r = client.post("/optimize", json=body)
@@ -76,4 +80,5 @@ def test_classic_request_is_untouched_by_op_fields(client: TestClient) -> None:
     assert data["collectedScore"] is None
     assert data["skippedAttractionIds"] == []
     assert data["timeBudgetMinutes"] is None
-    assert data["visitTimeMinutes"] == 0
+    assert data["visitTimeMinutes"] == 20  # 10' + 10', both attractions visited
+    assert data["totalTime"] == data["travelTimeMinutes"] + 20

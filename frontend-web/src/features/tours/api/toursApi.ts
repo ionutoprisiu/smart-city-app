@@ -34,6 +34,16 @@ export const ToursApi = {
     return tourDetailFromJson(data);
   },
 
+  // Delete a tour (author-only, enforced server-side).
+  async remove(id: number): Promise<void> {
+    try {
+      await ApiClient.delete(`/tours/${id}`);
+    } catch (e) {
+      Logger.error('Failed to delete tour', e);
+      throw e;
+    }
+  },
+
   // Optimize the tour server-side. With a time budget the run is an
   // Orienteering Problem: the response covers only the subset that fits and
   // reports the collected score plus the skipped attractions.

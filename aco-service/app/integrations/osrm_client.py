@@ -1,11 +1,5 @@
-"""Client for the two OSRM endpoints used by the optimizer:
-
-  * /table  -> cost matrices (duration + distance) between all points, for ACO;
-  * /route  -> the real road geometry for the final ordered tour, for the map.
-
-Every network path degrades gracefully: on any failure it returns None (matrix)
-or straight-line fallbacks (geometry), so the request never hard-fails.
-"""
+# OSRM client: /table gives the cost matrices for ACO, /route the road geometry for
+# the map. Failures degrade to None / straight lines — the request never hard-fails.
 from __future__ import annotations
 
 import logging
@@ -38,8 +32,12 @@ def _table_matrices_from_json(points: list[dict], data: dict) -> tuple[list[list
         log.warning("OSRM table failed: %s, falling back to Haversine", data.get("code"))
         return None
 
-    raw_d = data["distances"]
+    raw_d = data.get("distances")
     raw_t = data.get("durations")
+    if raw_d is None:
+        # "Ok" but no distance matrix (malformed/unexpected) -> fall back to Haversine.
+        log.warning("OSRM table 'Ok' but missing distances, falling back to Haversine")
+        return None
     n = len(points)
     dist_m = [[0.0] * n for _ in range(n)]
     dur_s = [[0.0] * n for _ in range(n)]
@@ -82,13 +80,6 @@ async def fetch_matrices(
     dist_m, dur_s = parsed
     log.info("OSRM matrices built for %d points (profile=%s)", len(points), prof)
     return dist_m, dur_s
-
-
-async def fetch_route_segments(
-    ordered_points: list[dict], profile: str = "driving"
-) -> tuple[list[list[dict]], list[float]]:
-    _geometry, segments, durations = await fetch_route_details(ordered_points, profile)
-    return segments, durations
 
 
 async def fetch_route_details(

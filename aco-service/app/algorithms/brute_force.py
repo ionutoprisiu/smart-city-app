@@ -1,8 +1,4 @@
-"""Exact TSP by trying every permutation.
-
-Gives the true optimum used as the reference in benchmarks, but grows as O(n!),
-so it is capped at a small n (only feasible up to ~12 points).
-"""
+# Exact TSP over every permutation — the benchmark optimum, O(n!), capped at ~12 points.
 from __future__ import annotations
 
 from itertools import permutations

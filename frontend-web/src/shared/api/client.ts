@@ -110,6 +110,21 @@ export const ApiClient = {
     }
   },
 
+  async delete(endpoint: string, opts?: RequestOptions): Promise<void> {
+    const url = ApiConfig.getUrl(endpoint);
+    Logger.debug(`DELETE Request: ${url}`);
+    try {
+      const response = await withTimeout(
+        fetch(url, { method: 'DELETE', headers: buildHeaders(opts), signal: opts?.signal }),
+        opts?.timeoutMs ?? TIMEOUT_MS,
+      );
+      await handle(response);
+    } catch (err) {
+      Logger.error(`DELETE Request failed: ${endpoint}`, err);
+      throw err;
+    }
+  },
+
   async put(
     endpoint: string,
     body: Record<string, unknown>,

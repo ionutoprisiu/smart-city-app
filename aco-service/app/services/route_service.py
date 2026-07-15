@@ -1,7 +1,4 @@
-"""Orchestrates one /optimize request: build points, fetch the cost matrix,
-run ACO, fetch the road geometry, and assemble the response. The heavy lifting
-lives in the algorithm and OSRM modules; this file only wires the steps together.
-"""
+# Wires one /optimize request together: points -> cost matrix -> ACO -> geometry -> response.
 from __future__ import annotations
 
 import logging
@@ -47,7 +44,10 @@ async def optimize(request: OptimizeRequest) -> OptimizeResponse:
         )
     else:
         best_route = _build_route(points, distance_matrix, duration_matrix, used_osrm)
-        op_extras = None
+        # Tours opened WITHOUT a budget still carry the guide's visit durations:
+        # report them so the total reflects travel + visits. Manual Visit City
+        # selections send no durations, so this stays None there.
+        op_extras = _visit_only_extras(request, best_route)
 
     best_distance_km = calculate_route_cost(best_route, distance_matrix)
     route_geometry, route_segments, leg_durations_sec = await _route_details(points, best_route, profile, used_osrm)
@@ -125,6 +125,18 @@ def _minutes_matrix(
     return [[km / speed * 60.0 for km in row] for row in distance_matrix]
 
 
+def _visit_only_extras(request: OptimizeRequest, best_route: list[int]) -> dict | None:
+    # The no-budget flow still counts visit durations in the total when the request
+    # carries them (tours always do); returns None for manual selections.
+    service = [0.0] + [a.visitDurationMinutes or 0.0 for a in request.attractions]
+    if not any(service):
+        return None
+    return {
+        "visitMinutes": sum(service[i] for i in best_route),
+        "visitByIndex": {i: service[i] for i in best_route if i != 0 and service[i] > 0},
+    }
+
+
 def _build_route_op(
     request: OptimizeRequest,
     points: list[dict],
@@ -156,11 +168,16 @@ def _build_route_op(
     visited = set(best_route)
     skipped_ids = [p["id"] for i, p in enumerate(points) if i not in visited and p["id"] != 0]
     visit_minutes = sum(service[i] for i in best_route)
+    # Report travel time from the OP's OWN basis (best_time = travel + visits on the
+    # same minutes matrix it optimized), so the displayed total is guaranteed to
+    # respect the budget — never the /route legs, which use a different OSRM source.
+    travel_minutes = max(0.0, optimizer.best_time - visit_minutes)
     extras = {
         "collectedScore": round(collected, 3),
         "skippedAttractionIds": skipped_ids,
         "timeBudgetMinutes": request.timeBudgetMinutes,
         "visitMinutes": visit_minutes,
+        "travelMinutes": travel_minutes,
         "visitByIndex": {i: service[i] for i in best_route if i != 0},
     }
     return best_route, extras
@@ -227,9 +244,14 @@ def _build_response(
         ))
         path.append({"latitude": point["latitude"], "longitude": point["longitude"]})
 
-    travel_min = _travel_time_minutes(
-        best_route, best_distance, duration_matrix, profile, leg_durations_sec,
-    )
+    # Orienteering mode reports travel from the OP's own basis (keeps total within
+    # the budget); classic TSP mode uses the richer OSRM-leg estimate.
+    if op_extras is not None and "travelMinutes" in op_extras:
+        travel_min = max(1, int(round(op_extras["travelMinutes"]))) if len(best_route) > 1 else 0
+    else:
+        travel_min = _travel_time_minutes(
+            best_route, best_distance, duration_matrix, profile, leg_durations_sec,
+        )
     visit_total_min = int(round((op_extras or {}).get("visitMinutes", 0.0)))
     return OptimizeResponse(
         steps=steps,

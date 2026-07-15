@@ -1,29 +1,36 @@
 from __future__ import annotations
 
 
+# Base for domain errors; api/errors.py maps each one to its HTTP status.
 class AppError(Exception):
-    """Base for domain errors mapped to HTTP responses in api/errors.py."""
+    pass
 
 
+# Requested resource does not exist -> 404.
 class NotFoundError(AppError):
-    """Requested resource does not exist -> 404."""
+    pass
 
 
+# Invalid input the client can fix -> 400.
 class ValidationAppError(AppError):
-    """Invalid input the client can fix -> 400."""
+    pass
 
 
+# Request conflicts with current state (e.g. duplicate email) -> 409.
 class ConflictError(AppError):
-    """Request conflicts with current state (e.g. duplicate email) -> 409."""
+    pass
 
 
+# Missing or invalid credentials -> 401.
 class UnauthorizedError(AppError):
-    """Missing or invalid credentials -> 401."""
+    pass
 
 
+# A required downstream service is unreachable -> 503.
 class ServiceUnavailableError(AppError):
-    """A required downstream service is unreachable -> 503."""
+    pass
 
 
+# A downstream service returned an invalid response -> 502.
 class BadGatewayError(AppError):
-    """A downstream service returned an invalid response -> 502."""
+    pass

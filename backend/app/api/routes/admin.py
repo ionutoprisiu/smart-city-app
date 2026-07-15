@@ -86,18 +86,6 @@ def reject_verification(
         raise _map_value_error(exc) from exc
 
 
-@router.post("/verifications/{user_id}/allow-resubmit")
-def allow_resubmit(
-    user_id: int,
-    _admin_id: int = Depends(require_admin_user_id),
-    db: Session = Depends(get_db),
-):
-    try:
-        return admin_service.allow_resubmit(db, user_id)
-    except ValueError as exc:
-        raise _map_value_error(exc) from exc
-
-
 @router.get("/users", response_model=AdminUserListResponse)
 def list_users(
     _admin_id: int = Depends(require_admin_user_id),

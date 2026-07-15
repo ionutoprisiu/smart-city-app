@@ -1,10 +1,5 @@
-"""2-opt local search for the open TSP (path anchored at node 0).
-
-A strong, classic baseline: starting from some tour, it repeatedly reverses a
-segment whenever that shortens the path, until no reversal helps anymore. Used
-both on its own (over a nearest-neighbour start) and as a refinement layer on top
-of the ACO solution (a simple memetic hybrid).
-"""
+# 2-opt local search (path anchored at node 0): reverse segments while it shortens
+# the path. Used over a NN start and as refinement on top of ACO.
 from __future__ import annotations
 
 from app.algorithms.nearest_neighbor import nearest_neighbor

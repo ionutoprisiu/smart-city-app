@@ -41,24 +41,6 @@ def get_current_user_id(
         raise HTTPException(status_code=401, detail="Invalid token") from None
 
 
-def get_optional_current_user_id(
-    credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
-) -> int | None:
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        return None
-    try:
-        payload = decode_access_token(credentials.credentials)
-    except InvalidTokenError:
-        return None
-    sub = payload.get("sub")
-    if sub is None:
-        return None
-    try:
-        return int(sub)
-    except (TypeError, ValueError):
-        return None
-
-
 def require_admin_user_id(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),

@@ -21,6 +21,10 @@ type VisitCityState = {
   routeResult: RouteResult | null;
   isOptimizing: boolean;
   routeStarted: boolean;
+  // Set when the current route came from opening a tour (Orienteering). Used so
+  // "Modifică" returns to the tour's budget picker instead of silently
+  // dropping into manual Visit City (TSP) mode.
+  activeTourId: number | null;
 
   routingProfile: RoutingProfile;
 
@@ -36,7 +40,7 @@ type VisitCityState = {
   loadAttractions: () => Promise<void>;
   optimizeRoute: () => Promise<void>;
   applyTour: (attractionIds: number[], profile: RoutingProfile) => Promise<void>;
-  applyTourRoute: (attractionIds: number[], result: RouteResult) => void;
+  applyTourRoute: (attractionIds: number[], result: RouteResult, tourId?: number | null) => void;
   clearRoute: () => void;
   startRoute: () => void;
   stopRoute: () => void;
@@ -63,6 +67,7 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
   routeResult: null,
   isOptimizing: false,
   routeStarted: false,
+  activeTourId: null,
 
   routingProfile: 'driving',
 
@@ -80,6 +85,7 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
       selectedIds: next,
       routeStarted: false,
       routeResult: null,
+      activeTourId: null, // manual edit exits tour (Orienteering) context
     });
   },
 
@@ -88,6 +94,7 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
       selectedIds: [],
       routeStarted: false,
       routeResult: null,
+      activeTourId: null,
     });
   },
 
@@ -144,6 +151,7 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
         routeResult: result,
         routingProfile: result.routingProfile,
         routeStarted: false,
+        activeTourId: null, // a manual optimize is a plain TSP run, not a tour
       });
     } catch (e) {
       set({ errorMessage: extractErrorMessage(e) });
@@ -168,13 +176,14 @@ export const useVisitCityStore = create<VisitCityState>((set, get) => ({
   // Load a route already optimized by the tours endpoint (possibly under a
   // time budget — Orienteering). Selection mirrors the tour's candidates so
   // every stop AND every skipped attraction stays visible on the map.
-  applyTourRoute: (attractionIds, result) => {
+  applyTourRoute: (attractionIds, result, tourId = null) => {
     set({
       selectedIds: attractionIds,
       routingProfile: result.routingProfile,
       routeResult: result,
       routeStarted: false,
       errorMessage: null,
+      activeTourId: tourId,
     });
   },
 

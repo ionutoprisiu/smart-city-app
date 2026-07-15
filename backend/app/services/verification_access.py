@@ -1,8 +1,5 @@
-"""Eligibility rules for the identity-verification flow.
-
-Each function answers "can this user do X right now?" from their current status,
-returning (allowed, reason) so the UI can both block the action and explain why.
-"""
+# Eligibility rules for the identity-verification flow: each function answers "can
+# this user do X right now?" as (allowed, reason), so the UI can block and explain.
 from __future__ import annotations
 
 from app.models.enums import Role, VerificationStatus
@@ -18,18 +15,17 @@ def parse_stored_status(raw: str) -> VerificationStatus:
 
 
 def submit_eligibility(user: User) -> tuple[bool, str | None]:
-    # Only a plain USER in NOT_SUBMITTED may upload; every other state is blocked
-    # with a specific reason (already guide, under review, locked, etc.).
+    # A plain USER may upload from NOT_SUBMITTED and may retry directly after a
+    # REJECTED outcome (better photos, new attempt); review/approved/pending
+    # states stay blocked with a specific reason.
     if user.role in (Role.ADMIN.value, Role.GUIDE.value):
         return False, "You are already a guide."
 
     status = parse_stored_status(user.verification_status)
-    if status == VerificationStatus.NOT_SUBMITTED:
+    if status in (VerificationStatus.NOT_SUBMITTED, VerificationStatus.REJECTED):
         return True, None
     if status == VerificationStatus.MANUAL_REVIEW:
         return False, "Your documents are under admin review. Wait for a decision."
-    if status == VerificationStatus.REJECTED:
-        return False, "Upload is locked until an admin allows a new submission."
     if status == VerificationStatus.APPROVED:
         return False, "Your identity is already verified."
     if status == VerificationStatus.PENDING:
@@ -44,10 +40,9 @@ def guide_flow_eligibility(user: User) -> tuple[bool, str | None]:
     status = parse_stored_status(user.verification_status)
     if status == VerificationStatus.MANUAL_REVIEW:
         return False, "Your documents are under admin review. Wait for a decision."
-    if status == VerificationStatus.REJECTED:
-        return False, "Upload is locked until an admin allows a new submission."
     if status == VerificationStatus.PENDING:
         return False, "Your verification is pending."
+    # NOT_SUBMITTED and REJECTED both open the flow (a rejected user retries).
     return True, None
 
 

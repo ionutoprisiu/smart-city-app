@@ -1,4 +1,4 @@
-"""Pure cost utilities shared by every algorithm — no I/O, no state."""
+# Pure cost utilities shared by every algorithm — no I/O, no state.
 from __future__ import annotations
 
 import math
@@ -39,7 +39,7 @@ def calculate_distance_matrix(points: list[dict]) -> list[list[float]]:
 
 
 def calculate_route_cost(route: list[int], cost_matrix: list[list[float]]) -> float:
-    """Sum the matrix edges along a route. Works for any cost (km or seconds)."""
+    # Sum of the matrix edges along the route; unit-agnostic (km or seconds).
     if len(route) < 2:
         return 0.0
     return sum(cost_matrix[route[i]][route[i + 1]] for i in range(len(route) - 1))

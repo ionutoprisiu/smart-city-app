@@ -25,9 +25,9 @@ def mock_osrm_single_leg(monkeypatch: pytest.MonkeyPatch) -> None:
         dur = [[0.0, 600.0], [600.0, 0.0]]
         return dist, dur
 
-    async def fetch_route_segments(
+    async def fetch_route_details(
         ordered_points: list[dict], profile: str
-    ) -> tuple[list[list[dict]], list[float]]:
+    ) -> tuple[list[dict], list[list[dict]], list[float]]:
         assert len(ordered_points) == 2
         assert profile == "driving"
         a, b = ordered_points[0], ordered_points[1]
@@ -35,10 +35,10 @@ def mock_osrm_single_leg(monkeypatch: pytest.MonkeyPatch) -> None:
             {"latitude": a["latitude"], "longitude": a["longitude"]},
             {"latitude": b["latitude"], "longitude": b["longitude"]},
         ]
-        return [seg], [600.0]
+        return seg, [seg], [600.0]
 
     monkeypatch.setattr("app.integrations.osrm_client.fetch_matrices", fetch_matrices)
-    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_segments", fetch_route_segments)
+    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_details", fetch_route_details)
 
 
 def test_optimize_single_attraction_with_osrm_mock(
@@ -113,12 +113,14 @@ def test_optimize_use_osrm_true_but_table_fails_falls_back_to_haversine(
     ) -> tuple[list[list[float]] | None, list[list[float]] | None]:
         return None, None
 
-    async def fetch_route_segments(_ordered: list[dict], _profile: str) -> tuple[list[list[dict]], list[float]]:
+    async def fetch_route_details(
+        _ordered: list[dict], _profile: str
+    ) -> tuple[list[dict], list[list[dict]], list[float]]:
         segment_calls.append("called")
-        raise AssertionError("segments must not run when OSRM matrices are unavailable")
+        raise AssertionError("route details must not run when OSRM matrices are unavailable")
 
     monkeypatch.setattr("app.integrations.osrm_client.fetch_matrices", fetch_matrices)
-    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_segments", fetch_route_segments)
+    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_details", fetch_route_details)
 
     body = {
         "attractions": [
@@ -142,17 +144,17 @@ def mock_osrm_single_leg_foot(monkeypatch: pytest.MonkeyPatch) -> None:
         assert len(points) == 2
         return [[0.0, 1.2], [1.2, 0.0]], [[0.0, 400.0], [400.0, 0.0]]
 
-    async def fetch_route_segments(ordered_points: list[dict], profile: str) -> tuple[list[list[dict]], list[float]]:
+    async def fetch_route_details(ordered_points: list[dict], profile: str) -> tuple[list[list[dict]], list[float]]:
         assert profile == "foot"
         a, b = ordered_points[0], ordered_points[1]
         seg = [
             {"latitude": a["latitude"], "longitude": a["longitude"]},
             {"latitude": b["latitude"], "longitude": b["longitude"]},
         ]
-        return [seg], [400.0]
+        return seg, [seg], [400.0]
 
     monkeypatch.setattr("app.integrations.osrm_client.fetch_matrices", fetch_matrices)
-    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_segments", fetch_route_segments)
+    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_details", fetch_route_details)
 
 
 def test_optimize_single_attraction_foot_profile_with_osrm_mock(
@@ -197,11 +199,12 @@ def test_optimize_three_points_stub_aco_order_and_osrm_segments(
         ]
         return dist_km, dur_s
 
-    async def fetch_route_segments(
+    async def fetch_route_details(
         ordered_points: list[dict], profile: str
-    ) -> tuple[list[list[dict]], list[float]]:
+    ) -> tuple[list[dict], list[list[dict]], list[float]]:
         assert profile == "driving"
         assert [p["id"] for p in ordered_points] == [0, 2, 1]
+        geometry = [{"latitude": p["latitude"], "longitude": p["longitude"]} for p in ordered_points]
         segs: list[list[dict]] = []
         durs: list[float] = []
         for a, b in zip(ordered_points, ordered_points[1:], strict=False):
@@ -212,11 +215,11 @@ def test_optimize_three_points_stub_aco_order_and_osrm_segments(
                 ]
             )
             durs.append(120.0)
-        return segs, durs
+        return geometry, segs, durs
 
     monkeypatch.setattr("app.services.route_service.ACOOptimizer", StubACO)
     monkeypatch.setattr("app.integrations.osrm_client.fetch_matrices", fetch_matrices)
-    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_segments", fetch_route_segments)
+    monkeypatch.setattr("app.integrations.osrm_client.fetch_route_details", fetch_route_details)
 
     body = {
         "attractions": [

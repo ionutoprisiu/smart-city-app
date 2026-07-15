@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '@shared/components/EmptyState';
 import { ErrorMessage } from '@shared/components/ErrorMessage';
 import { Icon } from '@shared/components/Icon';
@@ -68,7 +69,18 @@ export const VisitCityPage: React.FC = () => {
     optimizeRoute,
     clearSelection,
     clearRoute,
+    activeTourId,
   } = useVisitCityStore();
+  const navigate = useNavigate();
+
+  const handleModify = () => {
+    if (activeTourId != null) {
+      clearSelection();
+      navigate('/tours');
+    } else {
+      clearRoute();
+    }
+  };
 
   const [showMap, setShowMap] = useState(false);
   const [searchInput, setSearchInput] = useState('');
@@ -188,8 +200,9 @@ export const VisitCityPage: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottom: showMap
-            ? '1px solid color-mix(in srgb, var(--outline-variant) 25%, transparent)'
+            ? '1px solid color-mix(in srgb, var(--outline-variant) 18%, transparent)'
             : 'none',
+          boxShadow: showMap ? '0 4px 16px -8px rgba(0,0,0,0.15)' : 'none',
           background: showMap ? 'var(--surface)' : 'transparent',
           flexShrink: 0,
           position: showMap ? 'relative' : 'absolute',
@@ -199,27 +212,51 @@ export const VisitCityPage: React.FC = () => {
           zIndex: 20,
         }}
       >
-        <div style={{ width: 48 }} />
-        <div className="title-medium">{showMap ? 'Hartă' : ''}</div>
         {showMap ? (
-          <button
-            type="button"
-            className="icon-button"
-            onClick={() => setShowMap(false)}
-            title="Înapoi la listă"
-          >
-            <Icon name="view-list" size={22} color="var(--primary)" />
-          </button>
+          <>
+            <span
+              className="title-medium"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 9, paddingLeft: 6 }}
+            >
+              <span
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 9,
+                  background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="map" size={18} color="var(--primary)" />
+              </span>
+              Hartă
+            </span>
+            <button
+              type="button"
+              className="map-toggle-pill"
+              onClick={() => setShowMap(false)}
+              title="Înapoi la listă"
+            >
+              <Icon name="view-list" size={17} color="var(--primary)" />
+              Listă
+            </button>
+          </>
         ) : (
-          <button
-            type="button"
-            className="map-toggle-pill"
-            onClick={() => setShowMap(true)}
-            style={{ marginTop: 12, marginRight: 10 }}
-          >
-            <Icon name="map" size={17} color="var(--primary)" />
-            Hartă
-          </button>
+          <>
+            <div style={{ width: 48 }} />
+            <div />
+            <button
+              type="button"
+              className="map-toggle-pill"
+              onClick={() => setShowMap(true)}
+              style={{ marginTop: 12, marginRight: 10 }}
+            >
+              <Icon name="map" size={17} color="var(--primary)" />
+              Hartă
+            </button>
+          </>
         )}
       </div>
 
@@ -417,7 +454,7 @@ export const VisitCityPage: React.FC = () => {
                       ) : null}
                     </span>
                   </div>
-                  <button type="button" className="rp-modify" onClick={clearRoute}>
+                  <button type="button" className="rp-modify" onClick={handleModify}>
                     Modifică
                   </button>
                   <button type="button" className="rp-map" onClick={() => setShowMap(true)}>

@@ -28,7 +28,7 @@ def _seed_user(db: Session, *, status: VerificationStatus, role: Role = Role.USE
         is_approved=status == VerificationStatus.APPROVED,
         verification_status=status.value,
         verification_score=0.562 if status != VerificationStatus.NOT_SUBMITTED else None,
-        verification_reason="Approved by admin" if status == VerificationStatus.APPROVED else None,
+        verification_reason="Aprobat de administrator" if status == VerificationStatus.APPROVED else None,
         created_at=datetime.now(),
     )
     db.add(user)
@@ -85,7 +85,7 @@ def test_get_status_returns_admin_approved_status(client_factory) -> None:
     client = client_factory(status=VerificationStatus.APPROVED)
     body = _get_status(client)
     assert body["status"] == "APPROVED"
-    assert body["reason"] == "Approved by admin"
+    assert body["reason"] == "Aprobat de administrator"
     assert body["score"] == pytest.approx(0.562)
     assert body["role"] == "USER"
     assert body["isVerified"] is True
@@ -109,11 +109,12 @@ def test_get_status_manual_review_blocks_submit(client_factory) -> None:
     assert "admin review" in body["submitBlockedReason"].lower()
 
 
-def test_get_status_rejected_blocks_submit(client_factory) -> None:
+def test_get_status_rejected_allows_direct_resubmit(client_factory) -> None:
+    # A rejected user retries directly — no admin unlock step.
     client = client_factory(status=VerificationStatus.REJECTED)
     body = _get_status(client)
-    assert body["canSubmit"] is False
-    assert "locked" in body["submitBlockedReason"].lower()
+    assert body["canSubmit"] is True
+    assert body["submitBlockedReason"] is None
 
 
 def test_get_status_organizer_blocks_submit(client_factory) -> None:

@@ -1,5 +1,4 @@
 import L from 'leaflet';
-import 'leaflet-polylineoffset'; // patches L.Polyline to support a screen-pixel `offset` option
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { AppButton } from '@shared/components/AppButton';
@@ -10,12 +9,20 @@ import { CustomPinsBanner } from '../components/CustomPinsBanner';
 import { MapControlsCard } from '../components/MapControlsCard';
 import { RouteInfoCard } from '../components/RouteInfoCard';
 import { RouteStartBar } from '../components/RouteStartBar';
-import { RouteStepsList } from '../components/RouteStepsList';
 import { SelectionDock } from '../components/SelectionDock';
+import { ToursApi } from '@features/tours/api/toursApi';
 import { useVisitCityStore } from '../store/visitCityStore';
+
+// Time-budget presets for re-solving a tour (Orienteering) from the map.
+const BUDGET_PRESETS: { label: string; minutes: number | null }[] = [
+  { label: '1 oră', minutes: 60 },
+  { label: '2 ore', minutes: 120 },
+  { label: '3 ore', minutes: 180 },
+  { label: '4 ore', minutes: 240 },
+  { label: 'Fără limită', minutes: null },
+];
 import {
   ROUTE_START_POINT,
-  dedupeCoords,
   distanceKmBetween,
   sanitizeLeg,
   splitGeometryBySteps,
@@ -63,186 +70,29 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 0.05,
 };
 
-type RoutePolylineLayer = {
-  id: string;
-  coords: [number, number][];
-  color: string;
-  weight: number;
-  opacity: number;
-  kind: 'casing' | 'segment';
-  offsetPixels: number;
-};
-
 const toCoords = (points: { latitude: number; longitude: number }[]) =>
   points.map((p) => [p.latitude, p.longitude] as [number, number]);
 
-// Lanes share one street are fanned apart by this many screen pixels per lane.
-// Kept small: a wider offset self-intersects into visible loops at sharp turns.
-const LANE_PIXELS = 3;
-const LANE_KEY_DECIMALS = 5;
-// Two legs are fanned into separate lanes only if they share at least this many
-// road edges. A single incidental shared edge (legs merely touching at a
-// roundabout or a waypoint) must not trigger an offset, otherwise the pixel
-// offset self-intersects into a small loop on tight curves at low zoom.
-const MIN_SHARED_EDGES = 2;
-
-// Assigns each leg a lane index. Legs that share road geometry with other legs
-// are fanned out into distinct, symmetric lanes (…-1, 0, +1…); a leg that runs
-// on a unique road keeps lane 0. The separation is applied as a screen-pixel
-// offset at render time (robust, artifact-free, constant at every zoom).
-const assignLaneOffsets = (segments: [number, number][][]): number[] => {
-  const pointKey = (p: [number, number]) =>
-    `${p[0].toFixed(LANE_KEY_DECIMALS)},${p[1].toFixed(LANE_KEY_DECIMALS)}`;
-  const edgeKey = (a: [number, number], b: [number, number]) => {
-    const ka = pointKey(a);
-    const kb = pointKey(b);
-    return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
-  };
-
-  // Which legs traverse each (direction-agnostic) road edge.
-  const edgeToLegs = new Map<string, Set<number>>();
-  segments.forEach((coords, leg) => {
-    for (let i = 1; i < coords.length; i++) {
-      const key = edgeKey(coords[i - 1], coords[i]);
-      const legs = edgeToLegs.get(key);
-      if (legs == null) edgeToLegs.set(key, new Set([leg]));
-      else legs.add(leg);
-    }
-  });
-
-  // Count how many edges each pair of legs shares.
-  const sharedEdges = new Map<string, number>();
-  edgeToLegs.forEach((legs) => {
-    if (legs.size < 2) return;
-    const list = [...legs].sort((a, b) => a - b);
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const key = `${list[i]}|${list[j]}`;
-        sharedEdges.set(key, (sharedEdges.get(key) ?? 0) + 1);
-      }
-    }
-  });
-
-  // Link two legs only when they share a substantial run of road, not a single
-  // incidental edge (which would offset a leg into a loop on tight curves).
-  const neighbours: Set<number>[] = segments.map(() => new Set<number>());
-  sharedEdges.forEach((count, key) => {
-    if (count < MIN_SHARED_EDGES) return;
-    const [a, b] = key.split('|').map(Number);
-    neighbours[a].add(b);
-    neighbours[b].add(a);
-  });
-
-  // Fan out each connected group of overlapping legs around the shared street.
-  const lanes = new Array<number>(segments.length).fill(0);
-  const seen = new Array<boolean>(segments.length).fill(false);
-  for (let start = 0; start < segments.length; start++) {
-    if (seen[start]) continue;
-    const group: number[] = [];
-    const queue = [start];
-    seen[start] = true;
-    while (queue.length > 0) {
-      const current = queue.shift() as number;
-      group.push(current);
-      neighbours[current].forEach((nb) => {
-        if (!seen[nb]) {
-          seen[nb] = true;
-          queue.push(nb);
-        }
-      });
-    }
-    if (group.length <= 1) continue;
-    group.sort((a, b) => a - b);
-    group.forEach((leg, index) => {
-      lanes[leg] = index - (group.length - 1) / 2;
-    });
-  }
-  return lanes;
-};
-
-const buildRoutePolylines = (result: RouteResult | null): RoutePolylineLayer[] => {
-  if (result == null) {
-    return [];
-  }
-
-  const baseCoords =
-    result.routeGeometry.length > 1 ? dedupeCoords(toCoords(result.routeGeometry)) : [];
-
-  if (baseCoords.length < 2) {
-    return [];
-  }
-
+// Per-leg road-snapped coordinates (one array per consecutive stop pair). Used by
+// the step-through view: instead of drawing every colored leg at once (which
+// overlaps into an unreadable tangle), the map draws a single highlighted leg at
+// a time, stepped through after "Pornește".
+const buildLegCoords = (result: RouteResult | null): [number, number][][] => {
+  if (result == null) return [];
   const expectedLegs = Math.max(0, result.steps.length - 1);
+  if (expectedLegs === 0) return [];
 
-  // The backend already returns one road-snapped polyline per leg (one OSRM leg
-  // per consecutive waypoint pair). Prefer those. Only re-split the merged
-  // geometry ourselves when they are missing or degenerate.
   const fromApi = result.routeSegments
     .map((seg) => sanitizeLeg(toCoords(seg)))
     .filter((coords) => coords.length > 1);
+  if (fromApi.length === expectedLegs) return fromApi;
 
-  let segmentCoords: [number, number][][];
-  if (expectedLegs > 0 && fromApi.length === expectedLegs) {
-    segmentCoords = fromApi;
-  } else if (expectedLegs > 0) {
-    segmentCoords = splitGeometryBySteps(result.routeGeometry, result.steps)
-      .map((coords) => sanitizeLeg(coords))
-      .filter((coords) => coords.length > 1);
-  } else {
-    segmentCoords = [];
-  }
+  const split = splitGeometryBySteps(result.routeGeometry, result.steps)
+    .map((coords) => sanitizeLeg(coords))
+    .filter((coords) => coords.length > 1);
+  if (split.length === expectedLegs) return split;
 
-  if (segmentCoords.length <= 1) {
-    return [
-      {
-        id: 'route',
-        coords: segmentCoords[0] ?? baseCoords,
-        color: ROUTE_SEGMENT_COLORS[0],
-        weight: 6,
-        opacity: 1,
-        kind: 'segment',
-        offsetPixels: 0,
-      },
-    ];
-  }
-
-  // Each leg is drawn on its real OSRM road geometry. Legs that share a street
-  // are separated by a screen-pixel offset (see assignLaneOffsets) so they never
-  // hide each other. All white casings go underneath every colored segment.
-  const lanes = assignLaneOffsets(segmentCoords);
-  const casingLayers: RoutePolylineLayer[] = [];
-  const segmentLayers: RoutePolylineLayer[] = [];
-
-  segmentCoords.forEach((coords, i) => {
-    const offsetPixels = lanes[i] * LANE_PIXELS;
-    casingLayers.push({
-      id: `seg-casing-${i}`,
-      coords,
-      color: '#ffffff',
-      weight: 7,
-      opacity: 1,
-      kind: 'casing',
-      offsetPixels,
-    });
-    segmentLayers.push({
-      id: `seg-${i}`,
-      coords,
-      color: ROUTE_SEGMENT_COLORS[i % ROUTE_SEGMENT_COLORS.length],
-      weight: 4,
-      opacity: 1,
-      kind: 'segment',
-      offsetPixels,
-    });
-  });
-
-  return [...casingLayers, ...segmentLayers];
-};
-
-const polylineStrokeWidth = (layer: RoutePolylineLayer, profile: RoutingProfile) => {
-  if (layer.kind === 'casing') {
-    return layer.weight;
-  }
-  return profile === 'foot' ? layer.weight : layer.weight + 1;
+  return fromApi.length > 0 ? fromApi : split;
 };
 
 type DisplayMarker =
@@ -544,10 +394,54 @@ export const MapScreen: React.FC = () => {
     toggleSelection,
     addCustomPin,
     removeCustomPin,
+    activeTourId,
+    applyTourRoute,
   } = useVisitCityStore();
+
+  // Inline time-budget re-picker for a tour (Orienteering) route.
+  const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
+  const [reoptimizing, setReoptimizing] = useState(false);
+
+  // "Modifică" on a tour reopens the time-budget picker right here on the map and
+  // re-solves Orienteering — staying in the tour context. On a manual (TSP) route
+  // it just clears the line so the selection can be edited.
+  const handleModify = () => {
+    if (activeTourId != null) {
+      setBudgetSheetOpen(true);
+    } else {
+      clearRoute();
+    }
+  };
+
+  // Re-run the tour under a new time budget (null = no limit → plain TSP order).
+  const reoptimizeWithBudget = async (minutes: number | null) => {
+    if (activeTourId == null) return;
+    setReoptimizing(true);
+    try {
+      const result = await ToursApi.optimize(activeTourId, minutes);
+      applyTourRoute(selectedIds.filter((id) => id > 0), result, activeTourId);
+      setBudgetSheetOpen(false);
+    } catch {
+      // keep the existing route on failure
+    } finally {
+      setReoptimizing(false);
+    }
+  };
+
+  // "X" / cancel: a tour route exits cleanly (no leftover selection that could be
+  // re-optimized as a plain TSP); a manual route just drops the line.
+  const handleClear = () => {
+    if (activeTourId != null) {
+      clearSelection();
+    } else {
+      clearRoute();
+    }
+  };
 
   const mapRef = useRef<L.Map | null>(null);
   const didFitRoute = useRef(false);
+  // Which leg is highlighted in the step-through view (-1 = none yet, clean map).
+  const [currentLeg, setCurrentLeg] = useState(-1);
   const [details, setDetails] = useState<Attraction | null>(null);
   const [pinOptions, setPinOptions] = useState<Attraction | null>(null);
   const [clusterPicker, setClusterPicker] = useState<Extract<
@@ -573,6 +467,19 @@ export const MapScreen: React.FC = () => {
     }
   }, [routeResult, routeStarted]);
 
+  // When stepping to a leg, pan/zoom so the highlighted segment is fully visible.
+  useEffect(() => {
+    if (currentLeg < 0) return;
+    const coords = legCoords[currentLeg];
+    if (coords == null || coords.length < 2 || mapRef.current == null) return;
+    mapRef.current.flyToBounds(L.latLngBounds(coords), {
+      padding: [90, 90],
+      maxZoom: 17,
+      duration: 0.4,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLeg]);
+
   const handleRecenter = () => {
     mapRef.current?.flyTo(
       [ROUTE_START_POINT.latitude, ROUTE_START_POINT.longitude],
@@ -584,10 +491,14 @@ export const MapScreen: React.FC = () => {
   const mapRoutingProfile: RoutingProfile = routeResult?.routingProfile ?? routingProfile;
   const footOnMap = mapRoutingProfile === 'foot';
 
-  const polylines = useMemo(
-    () => buildRoutePolylines(routeResult),
-    [routeResult],
-  );
+  const legCoords = useMemo(() => buildLegCoords(routeResult), [routeResult]);
+  const numLegs = legCoords.length;
+
+  // Clean map after optimize (no line); the step-through begins on "Pornește",
+  // starting from the first leg.
+  useEffect(() => {
+    setCurrentLeg(routeStarted ? 0 : -1);
+  }, [routeResult, routeStarted]);
 
   const orderMap = useMemo(() => {
     const next: Record<number, number> = {};
@@ -685,19 +596,40 @@ export const MapScreen: React.FC = () => {
         <MapEvents onRegionChange={setMapRegion} onLongPress={addCustomPin} />
         <TileLayer url={TILE_URL} maxZoom={19} />
 
-        {polylines.map((line) => {
-          const pathOptions: L.PathOptions & { offset: number } = {
-            color: line.color,
-            weight: polylineStrokeWidth(line, mapRoutingProfile),
-            opacity: line.opacity,
-            lineCap: 'round',
-            lineJoin: 'round',
-            offset: line.offsetPixels,
-          };
-          return (
-            <Polyline key={`${line.id}:${line.offsetPixels}`} positions={line.coords} pathOptions={pathOptions} />
-          );
-        })}
+        {/* Step-through rendering: only the current leg is drawn — a clean,
+            prominent highlighted path (soft shadow + white casing + colored
+            line). No overlap issues because a single leg shows at a time. */}
+        {currentLeg >= 0 && legCoords[currentLeg] ? (
+          <>
+            <Polyline
+              key="cur-shadow"
+              positions={legCoords[currentLeg]}
+              pathOptions={{
+                color: '#0b1020',
+                weight: footOnMap ? 15 : 17,
+                opacity: 0.14,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+            <Polyline
+              key="cur-casing"
+              positions={legCoords[currentLeg]}
+              pathOptions={{ color: '#ffffff', weight: footOnMap ? 11 : 13, opacity: 1, lineCap: 'round', lineJoin: 'round' }}
+            />
+            <Polyline
+              key="cur-line"
+              positions={legCoords[currentLeg]}
+              pathOptions={{
+                color: ROUTE_SEGMENT_COLORS[currentLeg % ROUTE_SEGMENT_COLORS.length],
+                weight: footOnMap ? 7 : 8,
+                opacity: 1,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </>
+        ) : null}
 
         {displayMarkers.map((marker) => {
           if (marker.kind === 'cluster') {
@@ -751,7 +683,7 @@ export const MapScreen: React.FC = () => {
           routeStarted={routeStarted}
           onRecenter={handleRecenter}
           onModify={stopRoute}
-          onClear={clearRoute}
+          onClear={handleClear}
         />
       </div>
 
@@ -781,16 +713,51 @@ export const MapScreen: React.FC = () => {
         ) : null}
 
         {routeResult != null && !routeStarted ? (
-          <div>
-            <RouteInfoCard result={routeResult} layout="dock" />
-            <div style={{ marginBottom: 12 }}>
-              <RouteStartBar onStart={startRoute} onModify={clearRoute} />
-            </div>
+          <div className="glass-panel" style={{ borderRadius: 24, overflow: 'hidden', marginBottom: 12 }}>
+            <RouteInfoCard result={routeResult} layout="dock" bare />
+            <RouteStartBar
+              onStart={startRoute}
+              onModify={handleModify}
+              modifyLabel={activeTourId != null ? 'Schimbă timpul' : 'Modifică'}
+              bare
+            />
           </div>
         ) : null}
 
-        {routeResult != null && routeStarted ? (
-          <RouteStepsList result={routeResult} compact />
+        {routeResult != null && routeStarted && numLegs > 0 ? (
+          <div className="leg-stepper glass-panel">
+            <button
+              type="button"
+              className="leg-nav"
+              disabled={currentLeg <= 0}
+              onClick={() => setCurrentLeg((c) => Math.max(0, c - 1))}
+              aria-label="Segmentul anterior"
+            >
+              <Icon name="chevron-left" size={22} color={currentLeg <= 0 ? 'var(--outline)' : 'var(--primary)'} />
+            </button>
+            <div className="leg-info">
+              <span className="leg-title">
+                <span
+                  className="leg-dot"
+                  style={{ background: ROUTE_SEGMENT_COLORS[Math.max(0, currentLeg) % ROUTE_SEGMENT_COLORS.length] }}
+                />
+                Segment {Math.max(0, currentLeg) + 1} din {numLegs}
+              </span>
+              <span className="leg-sub">
+                {routeResult.steps[Math.max(0, currentLeg)]?.attractionName} →{' '}
+                {routeResult.steps[Math.max(0, currentLeg) + 1]?.attractionName}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="leg-nav"
+              disabled={currentLeg >= numLegs - 1}
+              onClick={() => setCurrentLeg((c) => Math.min(numLegs - 1, c + 1))}
+              aria-label="Segmentul următor"
+            >
+              <Icon name="chevron-right" size={22} color={currentLeg >= numLegs - 1 ? 'var(--outline)' : 'var(--primary)'} />
+            </button>
+          </div>
         ) : null}
 
         {routeResult == null && selectedCount() === 0 && customPins.length > 0 ? (
@@ -916,6 +883,40 @@ export const MapScreen: React.FC = () => {
             />
           </div>
         ) : null}
+      </BottomSheet>
+
+      <BottomSheet open={budgetSheetOpen} onClose={() => setBudgetSheetOpen(false)}>
+        <div style={{ padding: '8px 20px 28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Icon name="schedule" size={24} color="var(--primary)" />
+            <span className="title-large" style={{ flex: 1 }}>Cât timp ai la dispoziție?</span>
+          </div>
+          <div className="body-medium" style={{ color: 'var(--on-surface-variant)', marginTop: 6 }}>
+            Alege un buget de timp — algoritmul reselectează ce obiective încap și le reordonează.
+          </div>
+          {reoptimizing ? (
+            <div
+              className="body-medium"
+              style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 18, color: 'var(--primary)' }}
+            >
+              <Icon name="hourglass-top" size={18} color="var(--primary)" />
+              Se recalculează traseul…
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+              {BUDGET_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  className="budget-chip"
+                  onClick={() => reoptimizeWithBudget(p.minutes)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </BottomSheet>
     </div>
   );

@@ -19,6 +19,11 @@ export const Validators = {
     return undefined;
   }) as Validator,
 
+  loginPassword: ((value) => {
+    if (!value || value.length === 0) return 'Parola este obligatorie';
+    return undefined;
+  }) as Validator,
+
   phone: ((value) => {
     if (!value || value.trim().length === 0) return undefined;
     const stripped = value.replace(/\s+/g, '');

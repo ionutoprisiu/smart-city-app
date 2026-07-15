@@ -61,7 +61,7 @@ def approve_verification(db: Session, user_id: int) -> AdminVerificationItem:
     user.is_verified = True
     user.is_approved = True
     user.verified_at = now
-    user.verification_reason = "Approved by admin"
+    user.verification_reason = "Aprobat de administrator"
     if user.role != Role.ADMIN.value:
         user.role = Role.GUIDE.value
     db.commit()
@@ -71,23 +71,12 @@ def approve_verification(db: Session, user_id: int) -> AdminVerificationItem:
 
 def reject_verification(db: Session, user_id: int, reason: str | None) -> AdminVerificationItem:
     user = _get_user_for_review(db, user_id)
-    user.verification_status = VerificationStatus.REJECTED.value
-    user.is_verified = False
-    user.is_approved = False
-    user.verification_reason = (reason or "").strip() or "Rejected by admin"
-    db.commit()
-    db.refresh(user)
-    return _verification_item(user)
-
-
-def allow_resubmit(db: Session, user_id: int) -> AdminVerificationItem:
-    user = _get_user_or_raise(db, user_id)
-    if user.role in (Role.ADMIN.value, Role.GUIDE.value):
-        raise ValueError("Guides cannot resubmit verification")
-    if user.verification_status != VerificationStatus.REJECTED.value:
-        raise ValueError("Only rejected verifications can be reopened for resubmission")
-    user.verification_status = VerificationStatus.NOT_SUBMITTED.value
-    user.verification_reason = "Admin allowed a new submission"
+    # Respingerea șterge complet cererea (documente + stare): utilizatorul
+    # depune una nouă de la zero, fără vreo deblocare din partea adminului.
+    _clear_verification_state(
+        user,
+        reason=(reason or "").strip() or "Respins de administrator",
+    )
     db.commit()
     db.refresh(user)
     return _verification_item(user)
@@ -132,7 +121,7 @@ def demote_to_user(db: Session, user_id: int) -> AdminUserItem:
     # Losing the guide role also resets verification, so it must be re-earned.
     _clear_verification_state(
         user,
-        reason="Guide role removed; identity verification required again",
+        reason="Rol de ghid revocat; verificarea identității este necesară din nou",
     )
     db.commit()
     db.refresh(user)
@@ -149,7 +138,7 @@ def reset_user_verification(db: Session, user_id: int) -> AdminUserItem:
         raise ValueError("User verification is already reset")
     _clear_verification_state(
         user,
-        reason="Admin reset verification; new submission required",
+        reason="Verificare resetată de administrator; este necesară o nouă trimitere",
     )
     db.commit()
     db.refresh(user)
@@ -195,7 +184,7 @@ def update_user(
             if user.role == Role.GUIDE.value:
                 _clear_verification_state(
                     user,
-                    reason="Guide role removed; identity verification required again",
+                    reason="Rol de ghid revocat; verificarea identității este necesară din nou",
                 )
             user.role = Role.USER.value
     db.commit()
@@ -233,6 +222,10 @@ def _clear_verification_state(user: User, *, reason: str) -> None:
     user.verified_at = None
     user.verification_score = None
     user.verification_reason = reason
+    user.verification_metadata_json = None
+    user.id_card_image_url = None
+    user.face_image_url = None
+    verification_storage.delete_user_files(user.id)
 
 
 def _user_item(user: User) -> AdminUserItem:

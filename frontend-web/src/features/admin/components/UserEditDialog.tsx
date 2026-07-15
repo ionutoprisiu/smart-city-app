@@ -42,23 +42,23 @@ export function UserEditDialog({ user, loading = false, onSave, onClose }: Props
       >
         <div className="modal-card__head">
           <div>
-            <p className="label-small muted">Edit user</p>
+            <p className="label-small muted">Editează utilizatorul</p>
             <h3 id="edit-user-title" className="title-medium">
               {user.firstName} {user.lastName}
             </h3>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Închide">
             <Icon name="close" size={22} />
           </button>
         </div>
 
         <form className="user-form" onSubmit={handleSubmit}>
           <label className="field">
-            <span className="label-medium">First name</span>
+            <span className="label-medium">Prenume</span>
             <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
           </label>
           <label className="field">
-            <span className="label-medium">Last name</span>
+            <span className="label-medium">Nume</span>
             <input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
           </label>
           <label className="field">
@@ -72,14 +72,14 @@ export function UserEditDialog({ user, loading = false, onSave, onClose }: Props
           </label>
           {!isAdmin ? (
             <label className="field">
-              <span className="label-medium">Role</span>
+              <span className="label-medium">Rol</span>
               <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-                <option value="USER">USER</option>
+                <option value="USER">Turist</option>
                 <option
                   value="GUIDE"
                   disabled={!user.isVerified || user.verificationStatus !== "APPROVED"}
                 >
-                  GUIDE
+                  Ghid
                 </option>
               </select>
               {role === "GUIDE" && (!user.isVerified || user.verificationStatus !== "APPROVED") ? (
@@ -93,8 +93,8 @@ export function UserEditDialog({ user, loading = false, onSave, onClose }: Props
           )}
 
           <div className="modal-actions">
-            <AppButton label="Cancel" variant="outlined" onPress={onClose} disabled={loading} />
-            <AppButton label="Save changes" type="submit" loading={loading} />
+            <AppButton label="Renunță" variant="outlined" onPress={onClose} disabled={loading} />
+            <AppButton label="Salvează" type="submit" loading={loading} />
           </div>
         </form>
       </div>

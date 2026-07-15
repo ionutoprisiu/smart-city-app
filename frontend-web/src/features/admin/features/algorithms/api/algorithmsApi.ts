@@ -1,7 +1,6 @@
 import { ApiError, messageFromResponseBody } from "../../../api/errors";
 import { Logger } from "../../../utils/logger";
 import {
-  ACOParams,
   BenchmarkSet,
   CompareResult,
   benchmarkSetFromJson,
@@ -33,7 +32,6 @@ type CompareArgs = {
   setName: string;
   runs: number;
   seed?: number;
-  acoParams?: ACOParams;
 };
 
 export const AlgorithmsApi = {
@@ -47,10 +45,9 @@ export const AlgorithmsApi = {
     }
   },
 
-  async compare({ setName, runs, seed = 0, acoParams }: CompareArgs): Promise<CompareResult> {
+  async compare({ setName, runs, seed = 0 }: CompareArgs): Promise<CompareResult> {
     try {
       const body: Record<string, unknown> = { setName, runs, seed };
-      if (acoParams) body.acoParams = acoParams;
       const data = await request("/research/compare", {
         method: "POST",
         body: JSON.stringify(body),

@@ -9,14 +9,10 @@ from app.common.utc import utc_now
 from app.db.base import Base
 
 
+# A guide-published collection of catalog attractions. The tour stores only WHICH
+# attractions (plus a recommended profile); the ORDER is computed by ACO at open
+# time, and with a time budget the opening becomes an Orienteering Problem.
 class Tour(Base):
-    """A named, curated collection of catalog attractions published by a guide.
-
-    A tour holds only WHICH attractions to visit (plus a recommended routing
-    profile); the visiting ORDER is computed on demand by ACO when a user opens it.
-    With a time budget, opening becomes an Orienteering Problem: the optimizer
-    also picks WHICH of the guide's candidates fit the tourist's available time.
-    """
 
     __tablename__ = "tours"
 
@@ -34,8 +30,8 @@ class Tour(Base):
     )
 
 
+# Join row linking a tour to one catalog attraction, in the guide's order.
 class TourAttraction(Base):
-    """Join row linking a tour to one catalog attraction, in the guide's order."""
 
     __tablename__ = "tour_attractions"
 

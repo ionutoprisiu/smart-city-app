@@ -15,12 +15,8 @@ def list_sets() -> list[dict]:
 
 @router.post("/compare", summary="Compare algorithms on a benchmark set")
 def compare(request: CompareRequest) -> dict:
-    aco_params = request.acoParams.model_dump() if request.acoParams else None
-    pso_params = request.psoParams.model_dump() if request.psoParams else None
     return research_service.compare(
         set_name=request.setName,
         runs=request.runs,
         seed=request.seed,
-        aco_params=aco_params,
-        pso_params=pso_params,
     )

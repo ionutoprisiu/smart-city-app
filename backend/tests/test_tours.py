@@ -25,8 +25,14 @@ def _register(client: TestClient) -> str:
     return resp.json()["accessToken"]
 
 
-def test_list_tours_is_public_and_returns_a_list(client: TestClient) -> None:
+def test_list_tours_requires_authentication(client: TestClient) -> None:
     resp = client.get("/api/tours")
+    assert resp.status_code == 401
+
+
+def test_list_tours_returns_a_list_for_authenticated_users(client: TestClient) -> None:
+    token = _register(client)
+    resp = client.get("/api/tours", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
 
@@ -57,15 +63,30 @@ def test_create_tour_rejects_empty_attractions(client: TestClient) -> None:
     assert resp.status_code == 422  # blocked by schema validation before the service
 
 
+def test_optimize_requires_authentication(client: TestClient) -> None:
+    resp = client.post("/api/tours/1/optimize", json={"timeBudgetMinutes": 120})
+    assert resp.status_code == 401
+
+
 def test_optimize_rejects_invalid_budget(client: TestClient) -> None:
     # Schema validation fires before the tour lookup, so any id works here.
+    token = _register(client)
     for bad in (0, -30, 100000):
-        resp = client.post("/api/tours/1/optimize", json={"timeBudgetMinutes": bad})
+        resp = client.post(
+            "/api/tours/1/optimize",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"timeBudgetMinutes": bad},
+        )
         assert resp.status_code == 422
 
 
 def test_optimize_missing_tour_returns_404(client: TestClient) -> None:
-    resp = client.post("/api/tours/999999/optimize", json={"timeBudgetMinutes": 120})
+    token = _register(client)
+    resp = client.post(
+        "/api/tours/999999/optimize",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"timeBudgetMinutes": 120},
+    )
     assert resp.status_code == 404
 
 

@@ -6,7 +6,6 @@ type VerificationCardProps = {
   busy: boolean;
   onApprove: (userId: number) => void;
   onReject: (userId: number) => void;
-  onAllowResubmit?: (userId: number) => void;
 };
 
 export function VerificationCard({
@@ -14,11 +13,9 @@ export function VerificationCard({
   busy,
   onApprove,
   onReject,
-  onAllowResubmit,
 }: VerificationCardProps) {
   const canReview =
     item.verificationStatus === "MANUAL_REVIEW" || item.verificationStatus === "REJECTED";
-  const canAllowResubmit = item.verificationStatus === "REJECTED";
   const isAutoApproved = item.verificationStatus === "APPROVED";
 
   return (
@@ -30,11 +27,11 @@ export function VerificationCard({
           </h3>
           <p className="muted">{item.email}</p>
           <p>
-            Score: {item.verificationScore != null ? item.verificationScore.toFixed(3) : "—"}
+            Scor: {item.verificationScore != null ? item.verificationScore.toFixed(3) : "—"}
           </p>
-          <p className="muted">{item.verificationReason ?? "No reason given"}</p>
+          <p className="muted">{item.verificationReason ?? "Fără motiv specificat"}</p>
           {isAutoApproved ? (
-            <p className="muted">Guide role granted automatically. Use Users → Demote to revoke.</p>
+            <p className="muted">Rol de ghid acordat automat. Folosește Utilizatori → Retrogradează pentru revocare.</p>
           ) : null}
         </div>
         {canReview ? (
@@ -45,7 +42,7 @@ export function VerificationCard({
               disabled={busy}
               onClick={() => onApprove(item.userId)}
             >
-              Approve
+              Aprobă
             </button>
             <button
               type="button"
@@ -53,29 +50,19 @@ export function VerificationCard({
               disabled={busy}
               onClick={() => onReject(item.userId)}
             >
-              Reject
+              Respinge
             </button>
-            {canAllowResubmit && onAllowResubmit ? (
-              <button
-                type="button"
-                className="ghost"
-                disabled={busy}
-                onClick={() => onAllowResubmit(item.userId)}
-              >
-                Allow resubmit
-              </button>
-            ) : null}
           </div>
         ) : null}
       </div>
 
       <div className="verification-images">
         <figure>
-          <figcaption>ID card</figcaption>
+          <figcaption>Buletin</figcaption>
           {item.idCardImageUrl ? (
             <VerificationImage src={item.idCardImageUrl} alt={`ID ${item.firstName}`} />
           ) : (
-            <div className="image-placeholder">No ID photo</div>
+            <div className="image-placeholder">Fără poză buletin</div>
           )}
         </figure>
         <figure>
@@ -83,7 +70,7 @@ export function VerificationCard({
           {item.faceImageUrl ? (
             <VerificationImage src={item.faceImageUrl} alt={`Selfie ${item.firstName}`} />
           ) : (
-            <div className="image-placeholder">No selfie</div>
+            <div className="image-placeholder">Fără selfie</div>
           )}
         </figure>
       </div>

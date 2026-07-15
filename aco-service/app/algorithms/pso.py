@@ -1,10 +1,5 @@
-"""Particle Swarm Optimization for the TSP via random-key encoding.
-
-PSO works on continuous vectors, so each attraction gets a continuous "key" in
-[0,1]; sorting the keys yields a permutation. This turns the discrete TSP into a
-continuous problem the swarm can optimize. Used only as a secondary, uncalibrated
-baseline against ACO.
-"""
+# PSO for the TSP via random keys: one continuous key per node, sorted order = tour.
+# Secondary baseline against ACO.
 from __future__ import annotations
 
 import logging

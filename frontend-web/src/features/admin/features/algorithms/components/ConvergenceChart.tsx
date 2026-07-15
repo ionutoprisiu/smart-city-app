@@ -237,7 +237,7 @@ export const ConvergenceChart: React.FC<Props> = ({
             pointerEvents: 'none',
           }}
         >
-          <strong>Iter {hover.iteration}</strong>
+          <strong>Iterația {hover.iteration}</strong>
           <span style={{ color: 'var(--on-surface-variant)' }}> · </span>
           {formatCost(hover.cost, span)} km
         </div>
@@ -247,7 +247,7 @@ export const ConvergenceChart: React.FC<Props> = ({
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width="100%"
         role="img"
-        aria-label="ACO convergence chart"
+        aria-label="Graficul de convergență ACO"
         style={{ display: 'block', cursor: data.length > 0 ? 'crosshair' : 'default' }}
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => {
@@ -270,7 +270,7 @@ export const ConvergenceChart: React.FC<Props> = ({
           fill="var(--on-surface-variant)"
           transform={`rotate(-90 14 ${PAD.top + innerH / 2})`}
         >
-          Tour length (km)
+          Lungime traseu (km)
         </text>
 
         {yTicks.map((t, i) => (
@@ -302,7 +302,7 @@ export const ConvergenceChart: React.FC<Props> = ({
           </text>
         ))}
         <text x={PAD.left + innerW / 2} y={HEIGHT - 6} textAnchor="middle" fontSize={11} fill="var(--on-surface-variant)">
-          Iteration
+          Iterație
         </text>
 
         {refsWithLabels.map((ref) => (
@@ -331,6 +331,30 @@ export const ConvergenceChart: React.FC<Props> = ({
           />
         ) : null}
 
+        {optimal != null && last && last.cost > optimal ? (
+          <g>
+            <rect
+              x={PAD.left}
+              y={yScale(last.cost)}
+              width={innerW}
+              height={Math.max(0, yScale(optimal) - yScale(last.cost))}
+              fill="color-mix(in srgb, var(--error) 9%, transparent)"
+            />
+            {yScale(optimal) - yScale(last.cost) > 16 ? (
+              <text
+                x={PAD.left + 8}
+                y={(yScale(last.cost) + yScale(optimal)) / 2 + 3}
+                fontSize={10}
+                fontWeight={600}
+                fill="var(--error)"
+                opacity={0.85}
+              >
+                decalaj față de optim
+              </text>
+            ) : null}
+          </g>
+        ) : null}
+
         {areaPath ? <path d={areaPath} fill={`url(#${gradientId})`} /> : null}
         {linePath ? (
           <path d={linePath} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
@@ -340,7 +364,12 @@ export const ConvergenceChart: React.FC<Props> = ({
           <circle cx={xScale(first.iteration)} cy={yScale(first.cost)} r={3.5} fill="var(--surface)" stroke={lineColor} strokeWidth={2} />
         ) : null}
 
-        {last ? <circle cx={xScale(last.iteration)} cy={yScale(last.cost)} r={4.5} fill={lineColor} /> : null}
+        {last ? (
+          <g>
+            <circle cx={xScale(last.iteration)} cy={yScale(last.cost)} r={9} fill={lineColor} opacity={0.16} />
+            <circle cx={xScale(last.iteration)} cy={yScale(last.cost)} r={4.5} fill={lineColor} stroke="var(--surface)" strokeWidth={1.5} />
+          </g>
+        ) : null}
 
         {hover ? (
           <g>
@@ -384,7 +413,7 @@ export const ConvergenceChart: React.FC<Props> = ({
 
       {focus.zoomed ? (
         <div className="body-small" style={{ marginTop: 8, color: 'var(--on-surface-variant)' }}>
-          Auto-zoom: iterations 1–{xMax} (converged by iter {focus.lastImprovement}, full run: {totalIterations})
+          Zoom automat: iterațiile 1–{xMax} (a convergent la iterația {focus.lastImprovement}; rulare completă: {totalIterations} iterații)
         </div>
       ) : null}
     </div>

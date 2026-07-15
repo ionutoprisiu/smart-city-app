@@ -1,6 +1,6 @@
 # Smart City App
 
-Licență — turism urban în Cluj-Napoca: atracții, traseu optim (ACO + OSRM), verificare CI/selfie și tururi de la ghizi rezolvate ca problemă Orienteering (selecție + ordonare sub buget de timp). Client web în React (`frontend-web`).
+Licență — turism urban în Cluj-Napoca: atracții, traseu optimizat (ACO + OSRM), verificare CI/selfie și tururi de la ghizi rezolvate ca problemă Orienteering (selecție + ordonare sub buget de timp). Client web în React (`frontend-web`).
 
 ## Repository Layout
 
@@ -58,7 +58,7 @@ Vite + React + TypeScript user-facing app:
 
 - auth flow (login/register/verification gate)
 - visit-city list + filters + Leaflet map + route optimization
-- **map route display**: OSRM road geometry, colored legs, parallel lane offset (see `docs/traseu-si-harta.md`)
+- **map route display**: OSRM road geometry, step-by-step traversal (one highlighted leg at a time, see `docs/traseu-si-harta.md`)
 - tururi: browse guide-published candidate tours, pick a time budget (1h/2h/…/custom) → ACO-OP builds the itinerary on the map (collected score + skipped stops shown)
 - profile and verification screens (file upload)
 - Zustand stores, shared API client, light theme for presentation
@@ -87,7 +87,7 @@ Sign in with the seeded admin account (`ADMIN_USER_EMAIL` / `ADMIN_USER_PASSWORD
 - `POST /api/tours` (guide JWT)
 - `POST /api/tours/{tour_id}/optimize` (optional body: `{"timeBudgetMinutes": 120}` → Orienteering)
 - `POST /api/verification/submit`
-- `GET /api/verification/status/{user_id}`
+- `GET /api/verification/status` (JWT)
 - `GET /api/admin/verifications/pending` (admin JWT)
 - `POST /api/admin/verifications/{user_id}/approve` (admin JWT)
 - `POST /api/admin/verifications/{user_id}/reject` (admin JWT)
@@ -181,7 +181,3 @@ docker exec smart-city-backend pytest tests/ -q
 | [docs/traseu-si-harta.md](../docs/traseu-si-harta.md) | OSRM, geometrie traseu, vizualizare Leaflet |
 | [docs/control-panel.md](../docs/control-panel.md) | Zona de administrare (`/admin`), API admin, Algorithms |
 | [osrm-service/README.md](osrm-service/README.md) | Pregătire graf OSRM |
-
-## Note
-
-Un singur README la rădăcina `app/`. Folderul `frontend/` (React Native, legacy) nu mai face parte din fluxul principal; folosește `frontend-web`.

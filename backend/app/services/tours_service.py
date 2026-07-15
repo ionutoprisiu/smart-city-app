@@ -1,10 +1,5 @@
-"""Tours domain: guide-curated collections of catalog attractions.
-
-A tour records only WHICH attractions to visit; opening it optimizes the visiting
-ORDER with ACO (the same route_optimization_service the manual flow uses). Only
-verified guides may create tours, which is what ties the verification module to
-the core: it gates who can publish trip content.
-"""
+# Tours domain: only verified guides may publish; a tour records WHICH attractions
+# to visit, and opening it optimizes the ORDER via route_optimization_service.
 from __future__ import annotations
 
 from typing import Any
@@ -136,7 +131,7 @@ DEFAULT_VISIT_MINUTES = 15.0
 
 
 def _validate_durations(req: TourCreateRequest) -> dict[int, float]:
-    """Map attraction id -> visit duration; first occurrence wins on duplicates."""
+    # Map attraction id -> visit duration; first occurrence wins on duplicates.
     if req.visitDurationsMinutes is None:
         return {}
     if len(req.visitDurationsMinutes) != len(req.attractionIds):

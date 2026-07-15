@@ -1,10 +1,4 @@
-"""Ant Colony Optimization for the open TSP (tour anchored at node 0).
-
-Each iteration a colony of ants builds tours, choosing the next node
-probabilistically from pheromone + visibility; pheromone then evaporates and is
-reinforced on the tours found, so short tours attract future ants. The best tour
-seen so far is kept throughout.
-"""
+# Ant Colony Optimization for the open TSP (tour anchored at node 0).
 from __future__ import annotations
 
 import logging

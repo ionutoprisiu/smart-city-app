@@ -1,10 +1,5 @@
-"""Offline benchmark lab behind /research (the control-web Algorithms section).
-
-Runs ACO, PSO, nearest-neighbour and brute-force on fixed Cluj sets using
-Haversine distances (no OSRM, so results are deterministic and reproducible).
-Stochastic algorithms are run N times with distinct seeds and reported as
-mean +/- std, not a single lucky run.
-"""
+# Benchmark lab behind /research (admin "Algoritmi"): ACO/PSO/NN/brute force on fixed
+# Cluj sets, Haversine only; stochastic algorithms run N seeds -> mean +/- std.
 from __future__ import annotations
 
 import json
@@ -26,6 +21,7 @@ from app.algorithms.aco import (
 )
 from app.algorithms.brute_force import DEFAULT_MAX_POINTS, brute_force
 from app.algorithms.nearest_neighbor import nearest_neighbor
+from app.algorithms.two_opt import two_opt
 from app.algorithms.pso import (
     COGNITIVE,
     EARLY_STOPPING_THRESHOLD as PSO_EARLY_STOPPING,
@@ -158,6 +154,57 @@ def _run_aco(
     }
 
 
+def _run_aco_2opt(
+    matrix: list[list[float]],
+    runs: int,
+    base_seed: int,
+    params: dict[str, float | int],
+) -> dict[str, Any]:
+    # Memetic hybrid: ACO explores globally, then 2-opt refines each solution
+    # locally. Convergence history is ACO's; the reported cost is post-refinement.
+    costs: list[float] = []
+    times_ms: list[float] = []
+    best_cost = float("inf")
+    best_route: list[int] = []
+    best_history: list[float] = []
+
+    for offset in range(runs):
+        seed = base_seed + offset
+
+        def run(s=seed):
+            optimizer = ACOOptimizer(
+                matrix,
+                seed=s,
+                num_ants=int(params["numAnts"]),
+                max_iterations=int(params["maxIterations"]),
+                alpha=float(params["alpha"]),
+                beta=float(params["beta"]),
+                rho=float(params["rho"]),
+                q=float(params["q"]),
+                early_stopping_threshold=int(params["earlyStoppingThreshold"]),
+            )
+            aco_route, _ = optimizer.optimize()
+            refined_route, refined_cost = two_opt(matrix, aco_route)
+            return refined_route, refined_cost, optimizer.cost_history
+
+        (route, cost, history), elapsed = _timed(run)
+        costs.append(cost)
+        times_ms.append(elapsed)
+        if cost < best_cost:
+            best_cost = cost
+            best_route = route
+            best_history = list(history)
+
+    return {
+        "mean": statistics.fmean(costs),
+        "std": statistics.pstdev(costs) if len(costs) > 1 else 0.0,
+        "best": best_cost,
+        "timeMs": statistics.fmean(times_ms),
+        "route": best_route,
+        "history": best_history,
+    }
+
+
 def _run_pso(
     matrix: list[list[float]],
     runs: int,
@@ -214,16 +261,12 @@ def _gap_pct(optimal: float, value: float) -> float:
     return (value - optimal) / optimal * 100.0
 
 
-def compare(
-    set_name: str,
-    runs: int = 10,
-    seed: int = 0,
-    aco_params: dict[str, float | int] | None = None,
-    pso_params: dict[str, float | int] | None = None,
-) -> dict[str, Any]:
+def compare(set_name: str, runs: int = 10, seed: int = 0) -> dict[str, Any]:
+    # Every algorithm runs on its fixed, documented defaults — a fair,
+    # parameter-free comparison (no per-algorithm tuning).
     runs = max(1, min(int(runs), MAX_RUNS))
-    aco_cfg = {**DEFAULT_ACO_PARAMS, **(aco_params or {})}
-    pso_cfg = {**DEFAULT_PSO_PARAMS, **(pso_params or {})}
+    aco_cfg = dict(DEFAULT_ACO_PARAMS)
+    pso_cfg = dict(DEFAULT_PSO_PARAMS)
 
     dataset = _load_dataset()
     set_def = _resolve_set(set_name)
@@ -237,7 +280,10 @@ def compare(
     initial_cost = calculate_route_cost(initial_route, matrix)
 
     (greedy_route, greedy_cost), greedy_ms = _timed(lambda: nearest_neighbor(matrix))
+    # NN + 2-opt: a strong, deterministic local-search baseline (2-opt over NN).
+    (nn2_route, nn2_cost), nn2_ms = _timed(lambda: two_opt(matrix))
     aco = _run_aco(matrix, runs, seed, aco_cfg)
+    aco2 = _run_aco_2opt(matrix, runs, seed, aco_cfg)  # memetic hybrid
     pso = _run_pso(matrix, runs, seed, pso_cfg)
 
     # Exact optimum only where it is computationally feasible (small n).
@@ -246,14 +292,17 @@ def compare(
     if n <= DEFAULT_MAX_POINTS:
         (_, optimal_cost), optimal_ms = _timed(lambda: brute_force(matrix))
 
+    def _gap(value: float) -> float | None:
+        return round(_gap_pct(optimal_cost, value), 2) if optimal_cost else None
+
     algorithms = [
         {
             "key": "initial",
-            "label": "Initial order",
+            "label": "Ordine inițială",
             "cost": round(initial_cost, 3),
             "timeMs": None,
             "improvementPct": 0.0,
-            "gapPct": round(_gap_pct(optimal_cost, initial_cost), 2) if optimal_cost else None,
+            "gapPct": _gap(initial_cost),
         },
         {
             "key": "nearest_neighbor",
@@ -261,7 +310,15 @@ def compare(
             "cost": round(greedy_cost, 3),
             "timeMs": round(greedy_ms, 3),
             "improvementPct": round(_improvement_pct(initial_cost, greedy_cost), 2),
-            "gapPct": round(_gap_pct(optimal_cost, greedy_cost), 2) if optimal_cost else None,
+            "gapPct": _gap(greedy_cost),
+        },
+        {
+            "key": "nn_2opt",
+            "label": "NN + 2-opt",
+            "cost": round(nn2_cost, 3),
+            "timeMs": round(nn2_ms, 3),
+            "improvementPct": round(_improvement_pct(initial_cost, nn2_cost), 2),
+            "gapPct": _gap(nn2_cost),
         },
         {
             "key": "aco",
@@ -271,7 +328,17 @@ def compare(
             "std": round(aco["std"], 3),
             "timeMs": round(aco["timeMs"], 3),
             "improvementPct": round(_improvement_pct(initial_cost, aco["mean"]), 2),
-            "gapPct": round(_gap_pct(optimal_cost, aco["mean"]), 2) if optimal_cost else None,
+            "gapPct": _gap(aco["mean"]),
+        },
+        {
+            "key": "aco_2opt",
+            "label": "ACO + 2-opt",
+            "cost": round(aco2["mean"], 3),
+            "best": round(aco2["best"], 3),
+            "std": round(aco2["std"], 3),
+            "timeMs": round(aco2["timeMs"], 3),
+            "improvementPct": round(_improvement_pct(initial_cost, aco2["mean"]), 2),
+            "gapPct": _gap(aco2["mean"]),
         },
         {
             "key": "pso",
@@ -281,7 +348,7 @@ def compare(
             "std": round(pso["std"], 3),
             "timeMs": round(pso["timeMs"], 3),
             "improvementPct": round(_improvement_pct(initial_cost, pso["mean"]), 2),
-            "gapPct": round(_gap_pct(optimal_cost, pso["mean"]), 2) if optimal_cost else None,
+            "gapPct": _gap(pso["mean"]),
         },
     ]
 
@@ -289,7 +356,7 @@ def compare(
         algorithms.append(
             {
                 "key": "optimal",
-                "label": "Brute force (optimal)",
+                "label": "Brute force (optim)",
                 "cost": round(optimal_cost, 3),
                 "timeMs": round(optimal_ms or 0.0, 3),
                 "improvementPct": round(_improvement_pct(initial_cost, optimal_cost), 2),
